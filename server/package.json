@@ -1,0 +1,19 @@
+{
+  "name": "leetcode-backend-api",
+  "version": "1.0.0",
+  "description": "Express backend for code execution (Judge0) and AI verification (Google Gen AI SDK Gemini 2.5 Flash)",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.22.0",
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "socket.io": "^4.8.3"
+  }
+}
