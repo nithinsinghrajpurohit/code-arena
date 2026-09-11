@@ -47,17 +47,21 @@ const io = new SocketIOServer(server, {
  * ============================================================================
  */
 const JUDGE0_LANGUAGE_MAP = {
-  c: 50,
-  cpp: 54,
-  'c++': 54,
-  java: 62,
-  python: 71,
-  py: 71,
-  python3: 71,
-  '50': 50,
-  '54': 54,
-  '62': 62,
-  '71': 71
+  c: 103, // C (GCC 14.1.0)
+  cpp: 105, // C++ (GCC 14.1.0)
+  'c++': 105,
+  java: 91, // Java (JDK 17.0.6)
+  python: 100, // Python (3.12.5) - Supports list[int] and modern syntax natively!
+  py: 100,
+  python3: 100,
+  '50': 103,
+  '54': 105,
+  '62': 91,
+  '71': 100,
+  '100': 100,
+  '105': 105,
+  '91': 91,
+  '103': 103
 };
 
 const PISTON_LANGUAGE_MAP = {
@@ -358,18 +362,20 @@ app.post('/api/run', async (req, res) => {
       const statusId = data.status?.id || 3;
       const statusDescription = data.status?.description || 'Accepted';
 
+      const effectiveStderr = stderr || (statusId !== 3 && !compile_output ? message : null);
+
       return res.status(200).json({
         stdout: stdout || null,
-        stderr: stderr || null,
-        compile_output: compile_output || message || null,
-        output: stdout || stderr || compile_output || message || null,
+        stderr: effectiveStderr || null,
+        compile_output: compile_output || null,
+        output: stdout || effectiveStderr || compile_output || null,
         exit_code: statusId === 3 ? 0 : 1,
         status: {
           id: statusId,
           description: statusDescription
         },
         language: langKey,
-        version: 'Judge0-CE (GCC/OpenJDK)',
+        version: 'Judge0-CE (GCC 14 / JDK 17 / Python 3.12)',
         time: `${data.time || '0.01'} s`,
         memory: `${((data.memory || 1024) / 1024).toFixed(1)} MB`
       });
