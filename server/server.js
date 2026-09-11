@@ -1203,6 +1203,8 @@ io.on('connection', (socket) => {
       }
     }
   });
+});
+
 // In production or unified deployments: serve built frontend assets if dist exists
 const possibleDistPaths = [
   path.resolve('dist'),
