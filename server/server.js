@@ -318,6 +318,86 @@ async function executeLocally(langKey, source_code) {
 
 /**
  * ============================================================================
+ * Helper: Execute code on Judge0 CE with async submission and polling
+ * ============================================================================
+ */
+async function executeOnJudge0(source_code, langKey, stdin = '') {
+  let preparedCode = source_code;
+
+  // In Java, Judge0 compiles Main.java, so entry class must be named 'Main'
+  if (langKey === 'java') {
+    preparedCode = preparedCode.replace(/public\s+class\s+([A-Za-z0-9_]+)/, 'public class Main');
+  }
+
+  const judge0Id = JUDGE0_LANGUAGE_MAP[langKey] || 100;
+  const base64Code = Buffer.from(preparedCode, 'utf8').toString('base64');
+  const base64Stdin = stdin ? Buffer.from(stdin, 'utf8').toString('base64') : '';
+
+  // 1. Submit asynchronously (immediate response, no socket hang)
+  const submitRes = await axios.post(
+    'https://ce.judge0.com/submissions?base64_encoded=true',
+    {
+      source_code: base64Code,
+      language_id: judge0Id,
+      stdin: base64Stdin
+    },
+    {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000
+    }
+  );
+
+  const token = submitRes.data?.token;
+  if (!token) {
+    throw new Error('No submission token received from compiler sandbox.');
+  }
+
+  // 2. Poll for execution status (up to 15 seconds)
+  const decode = (s) => (s ? Buffer.from(s, 'base64').toString('utf8') : null);
+
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await new Promise((r) => setTimeout(r, 600));
+
+    const pollRes = await axios.get(
+      `https://ce.judge0.com/submissions/${token}?base64_encoded=true`,
+      { timeout: 8000 }
+    );
+
+    const data = pollRes.data;
+    const statusId = data.status?.id || 1;
+
+    // Status IDs: 1 = In Queue, 2 = Processing. Anything > 2 is finished!
+    if (statusId > 2) {
+      const stdout = decode(data.stdout);
+      const stderr = decode(data.stderr);
+      const compile_output = decode(data.compile_output);
+      const message = decode(data.message);
+      const statusDescription = data.status?.description || 'Accepted';
+      const effectiveStderr = stderr || (statusId !== 3 && !compile_output ? message : null);
+
+      return {
+        stdout: stdout || null,
+        stderr: effectiveStderr || null,
+        compile_output: compile_output || null,
+        output: stdout || effectiveStderr || compile_output || null,
+        exit_code: statusId === 3 ? 0 : 1,
+        status: {
+          id: statusId,
+          description: statusDescription
+        },
+        language: langKey,
+        version: 'Judge0-CE (GCC 14 / JDK 17 / Python 3.12)',
+        time: `${data.time || '0.01'} s`,
+        memory: `${((data.memory || 1024) / 1024).toFixed(1)} MB`
+      };
+    }
+  }
+
+  throw new Error('Compiler sandbox timeout: execution took longer than 12 seconds.');
+}
+
+/**
+ * ============================================================================
  * 1. Code Execution Endpoint: POST /api/run
  * ============================================================================
  */
@@ -332,61 +412,19 @@ app.post('/api/run', async (req, res) => {
     }
 
     const langKey = mapToLanguageKey(language || language_id);
-    const judge0Id = JUDGE0_LANGUAGE_MAP[langKey] || 71;
 
     try {
-      const base64Code = Buffer.from(source_code, 'utf8').toString('base64');
-      const base64Stdin = stdin ? Buffer.from(stdin, 'utf8').toString('base64') : '';
-
-      const judge0Response = await axios.post(
-        'https://ce.judge0.com/submissions?base64_encoded=true&wait=true',
-        {
-          source_code: base64Code,
-          language_id: judge0Id,
-          stdin: base64Stdin
-        },
-        {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 15000
-        }
-      );
-
-      const data = judge0Response.data;
-      const decode = (s) => (s ? Buffer.from(s, 'base64').toString('utf8') : null);
-
-      const stdout = decode(data.stdout);
-      const stderr = decode(data.stderr);
-      const compile_output = decode(data.compile_output);
-      const message = decode(data.message);
-
-      const statusId = data.status?.id || 3;
-      const statusDescription = data.status?.description || 'Accepted';
-
-      const effectiveStderr = stderr || (statusId !== 3 && !compile_output ? message : null);
-
-      return res.status(200).json({
-        stdout: stdout || null,
-        stderr: effectiveStderr || null,
-        compile_output: compile_output || null,
-        output: stdout || effectiveStderr || compile_output || null,
-        exit_code: statusId === 3 ? 0 : 1,
-        status: {
-          id: statusId,
-          description: statusDescription
-        },
-        language: langKey,
-        version: 'Judge0-CE (GCC 14 / JDK 17 / Python 3.12)',
-        time: `${data.time || '0.01'} s`,
-        memory: `${((data.memory || 1024) / 1024).toFixed(1)} MB`
-      });
-
+      const result = await executeOnJudge0(source_code, langKey, stdin);
+      return res.status(200).json(result);
     } catch (judge0Err) {
-      console.warn('Judge0 CE API request failed:', judge0Err.message);
+      console.warn('Judge0 CE API execution failed:', judge0Err.message);
 
-      // Local fallback for Python and Java
-      if (langKey === 'python' || langKey === 'java') {
-        const localResult = await executeLocally(langKey, source_code);
-        return res.status(200).json(localResult);
+      // Local fallback for Python only if available
+      if (langKey === 'python') {
+        try {
+          const localResult = await executeLocally(langKey, source_code);
+          return res.status(200).json(localResult);
+        } catch (e) {}
       }
 
       return res.status(500).json({
@@ -612,25 +650,6 @@ ${JSON.stringify(execution_output || {}, null, 2)}
     engine: usedGemini ? 'Gemini 2.5 Flash' : 'Built-in Intelligent Evaluator'
   };
 }
-
-app.get('/api/debug-judge0', async (req, res) => {
-  try {
-    const testCode = Buffer.from('print(42)').toString('base64');
-    const r = await axios.post(
-      'https://ce.judge0.com/submissions?base64_encoded=true&wait=true',
-      { source_code: testCode, language_id: 100 },
-      { headers: { 'Content-Type': 'application/json' }, timeout: 10000 }
-    );
-    res.json({ ok: true, data: r.data });
-  } catch (err) {
-    res.json({
-      ok: false,
-      message: err.message,
-      status: err.response?.status,
-      data: err.response?.data
-    });
-  }
-});
 
 /**
  * ============================================================================
