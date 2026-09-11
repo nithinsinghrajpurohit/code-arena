@@ -98,6 +98,12 @@ const RANDOM_NICKNAMES = [
   'RecursionKing'
 ];
 
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL ||
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+    ? window.location.origin
+    : 'http://localhost:5000');
+
 export default function LeetCodePlatform() {
   // Socket.io Connection & Arena Room State
   const [socket, setSocket] = useState(null);
@@ -182,7 +188,7 @@ export default function LeetCodePlatform() {
   // Socket.io Initialization & Event Subscriptions
   // --------------------------------------------------------------------------
   useEffect(() => {
-    const s = io('http://localhost:5000', {
+    const s = io(BACKEND_URL, {
       transports: ['websocket', 'polling']
     });
 
@@ -518,7 +524,7 @@ export default function LeetCodePlatform() {
     setBottomTab('execution');
 
     try {
-      const response = await fetch('http://localhost:5000/api/run', {
+      const response = await fetch(`${BACKEND_URL}/api/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -576,7 +582,7 @@ export default function LeetCodePlatform() {
         timePercentile: 'N/A',
         memory: 'N/A',
         memoryPercentile: 'N/A',
-        stdout: ['Failed to reach server at http://localhost:5000/api/run', err.message],
+        stdout: [`Failed to reach server at ${BACKEND_URL}/api/run`, err.message],
         errorTip: 'Ensure node server.js is running in the server/ directory.'
       });
     } finally {

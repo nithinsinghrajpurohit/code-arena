@@ -1203,7 +1203,25 @@ io.on('connection', (socket) => {
       }
     }
   });
-});
+// In production or unified deployments: serve built frontend assets if dist exists
+const possibleDistPaths = [
+  path.resolve('dist'),
+  path.resolve('../dist')
+];
+
+for (const distPath of possibleDistPaths) {
+  if (fs.existsSync(distPath)) {
+    console.log(`[ARENA] Serving production frontend build from: ${distPath}`);
+    app.use(express.static(distPath));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+        return next();
+      }
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+    break;
+  }
+}
 
 // Start Express & Socket.io Server
 server.listen(PORT, () => {
