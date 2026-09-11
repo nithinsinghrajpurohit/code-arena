@@ -613,6 +613,25 @@ ${JSON.stringify(execution_output || {}, null, 2)}
   };
 }
 
+app.get('/api/debug-judge0', async (req, res) => {
+  try {
+    const testCode = Buffer.from('print(42)').toString('base64');
+    const r = await axios.post(
+      'https://ce.judge0.com/submissions?base64_encoded=true&wait=true',
+      { source_code: testCode, language_id: 100 },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 10000 }
+    );
+    res.json({ ok: true, data: r.data });
+  } catch (err) {
+    res.json({
+      ok: false,
+      message: err.message,
+      status: err.response?.status,
+      data: err.response?.data
+    });
+  }
+});
+
 /**
  * ============================================================================
  * HTTP Endpoint: POST /api/verify
