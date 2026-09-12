@@ -33,7 +33,10 @@ import {
   Send,
   Timer,
   Search,
-  BookOpen
+  BookOpen,
+  Split,
+  Eye,
+  ArrowLeft
 } from 'lucide-react';
 import { LEETCODE_PROBLEM_BANK } from './leetcode_bank.js';
 
@@ -53,6 +56,17 @@ const LANGUAGE_LABELS = {
   cpp: { label: 'C++', monacoId: 'cpp', ext: '.cpp' },
   java: { label: 'Java', monacoId: 'java', ext: '.java' },
   c: { label: 'C', monacoId: 'c', ext: '.c' }
+};
+
+const getMonacoLang = (lang) => {
+  if (!lang) return 'python';
+  const l = String(lang).toLowerCase();
+  if (l.includes('py')) return 'python';
+  if (l.includes('c++') || l.includes('cpp')) return 'cpp';
+  if (l.includes('java') && !l.includes('script')) return 'java';
+  if (l === 'c') return 'c';
+  if (l.includes('js') || l.includes('javascript')) return 'javascript';
+  return 'python';
 };
 
 const TEST_CASES = [
@@ -133,6 +147,20 @@ export default function LeetCodePlatform() {
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [winnerInfo, setWinnerInfo] = useState(null);
   const [battleToast, setBattleToast] = useState(null);
+
+  // Post-Battle Code Review & Solution Modal
+  const [showCodeReviewModal, setShowCodeReviewModal] = useState(false);
+  const [selectedReviewTab, setSelectedReviewTab] = useState('official');
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [copiedReviewCode, setCopiedReviewCode] = useState(false);
+  const [selectedOfficialLangIndex, setSelectedOfficialLangIndex] = useState(0);
+
+  const handleCopyReviewCode = (code) => {
+    if (!code) return;
+    navigator.clipboard.writeText(code);
+    setCopiedReviewCode(true);
+    setTimeout(() => setCopiedReviewCode(false), 2000);
+  };
 
   // Editor and execution states
   const [selectedLanguage, setSelectedLanguage] = useState('python');
@@ -299,10 +327,15 @@ export default function LeetCodePlatform() {
       setIsSubmitting(false);
     });
 
-    s.on('battle_ended', ({ leaderboard, winner, reason }) => {
+    s.on('battle_ended', ({ leaderboard, winner, reason, problem }) => {
       setLeaderboardData(leaderboard);
       setWinnerInfo(winner);
+      if (problem) {
+        setCurrentProblem(problem);
+      }
       setShowLeaderboardModal(true);
+      setShowCodeReviewModal(false);
+      setSelectedReviewTab('official');
       setIsSubmitting(false);
     });
 
@@ -455,6 +488,7 @@ export default function LeetCodePlatform() {
     setRoomState(null);
     setCurrentProblem(DEFAULT_PROBLEM);
     setShowLeaderboardModal(false);
+    setShowCodeReviewModal(false);
     setLeaderboardData(null);
     setWinnerInfo(null);
     setShowLobbyModal(true);
@@ -743,15 +777,33 @@ export default function LeetCodePlatform() {
                 </button>
               )}
 
-              {/* View Leaderboard Button (if battle ended or leaderboard exists) */}
+              {/* View Leaderboard & Code Review Buttons (if battle ended or leaderboard exists) */}
               {leaderboardData && (
-                <button
-                  onClick={() => setShowLeaderboardModal(true)}
-                  className="flex items-center space-x-1 px-2.5 py-1 rounded text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition cursor-pointer"
-                >
-                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Leaderboard</span>
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      setShowLeaderboardModal(true);
+                      setShowCodeReviewModal(false);
+                    }}
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition cursor-pointer"
+                    title="View battle leaderboard rankings"
+                  >
+                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Leaderboard</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowCodeReviewModal(true);
+                      setShowLeaderboardModal(false);
+                    }}
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-500/30 transition cursor-pointer"
+                    title="Review submitted code of all members and official solution"
+                  >
+                    <Code2 className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Code Review</span>
+                  </button>
+                </>
               )}
 
               {/* Leave Room Button */}
@@ -1809,6 +1861,19 @@ export default function LeetCodePlatform() {
                       <span className="font-bold text-white truncate">
                         {player.nickname} {isMe && <span className="text-indigo-400 text-[11px]">(You)</span>}
                       </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedReviewTab(player.id);
+                          setShowLeaderboardModal(false);
+                          setShowCodeReviewModal(true);
+                        }}
+                        className="ml-auto shrink-0 px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 hover:border-indigo-500/50 transition cursor-pointer"
+                        title="Inspect submitted code"
+                      >
+                        Inspect Code
+                      </button>
                     </div>
 
                     {/* Status */}
@@ -1883,10 +1948,15 @@ export default function LeetCodePlatform() {
             <div className="pt-3 border-t border-[#30363d] flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => setShowLeaderboardModal(false)}
-                className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#21262d] hover:bg-[#30363d] text-gray-300 transition"
+                onClick={() => {
+                  setShowLeaderboardModal(false);
+                  setShowCodeReviewModal(true);
+                  setSelectedReviewTab('official');
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600/30 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/40 transition cursor-pointer"
               >
-                Review Solution Code
+                <Code2 className="w-3.5 h-3.5" />
+                <span>Review All Solutions & Code</span>
               </button>
 
               <button
@@ -1901,6 +1971,631 @@ export default function LeetCodePlatform() {
           </div>
         </div>
       )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* 5. POST-BATTLE CODE REVIEW & OFFICIAL SOLUTION MODAL               */}
+      {/* ------------------------------------------------------------------ */}
+      {showCodeReviewModal && leaderboardData && (() => {
+        const officialSolutions =
+          currentProblem?.botSolutions && currentProblem.botSolutions.length > 0
+            ? currentProblem.botSolutions
+            : [
+                {
+                  code: currentProblem?.boilerplates?.[selectedLanguage] || currentProblem?.boilerplates?.python || '// Optimal reference implementation',
+                  language: selectedLanguage,
+                  score: 100,
+                  accuracy_score: 100,
+                  feedback: 'Optimal algorithmic reference solution.'
+                }
+              ];
+        const activeOfficialSolution = officialSolutions[selectedOfficialLangIndex] || officialSolutions[0];
+
+        const activeContender =
+          leaderboardData.find((p) => p.id === selectedReviewTab) ||
+          leaderboardData.find((p) => p.id === socket?.id) ||
+          leaderboardData[0];
+
+        const isViewingOfficialOnly = selectedReviewTab === 'official' && !isCompareMode;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150">
+            <div className="w-full max-w-7xl bg-[#161b22] border border-indigo-500/40 rounded-2xl shadow-2xl flex flex-col h-[92vh] overflow-hidden">
+              {/* Modal Top Header */}
+              <div className="p-3.5 sm:px-6 sm:py-4 border-b border-[#30363d] bg-[#0d1117] flex flex-wrap items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shrink-0 shadow">
+                    <Code2 className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base sm:text-lg font-bold text-white truncate">
+                        Post-Battle Code Review & Solutions
+                      </h2>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        {currentProblem?.title || 'Problem'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        currentProblem?.difficulty === 'Easy' ? 'bg-emerald-500/20 text-emerald-400' :
+                        currentProblem?.difficulty === 'Medium' ? 'bg-amber-500/20 text-amber-400' :
+                        'bg-rose-500/20 text-rose-400'
+                      }`}>
+                        {currentProblem?.difficulty || 'Medium'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 truncate">
+                      Examine submitted code from all battle members and compare against the verified optimal solution.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Side-by-Side Comparison Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedReviewTab === 'official' && !isCompareMode) {
+                        setSelectedReviewTab(activeContender?.id || leaderboardData[0]?.id);
+                      }
+                      setIsCompareMode(!isCompareMode);
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                      isCompareMode
+                        ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                        : 'bg-[#21262d] text-gray-300 border-[#30363d] hover:bg-[#30363d] hover:text-white'
+                    }`}
+                    title="Toggle side-by-side comparison mode"
+                  >
+                    <Split className="w-3.5 h-3.5" />
+                    <span>{isCompareMode ? 'Single View' : 'Side-by-Side Compare'}</span>
+                  </button>
+
+                  {/* Back to Leaderboard */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCodeReviewModal(false);
+                      setShowLeaderboardModal(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#21262d] text-amber-300 border border-amber-500/30 hover:bg-[#30363d] transition cursor-pointer"
+                  >
+                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden sm:inline">Leaderboard</span>
+                  </button>
+
+                  {/* Close Modal */}
+                  <button
+                    type="button"
+                    onClick={() => setShowCodeReviewModal(false)}
+                    className="p-1.5 text-gray-400 hover:text-white hover:bg-[#21262d] rounded-lg transition cursor-pointer"
+                    title="Close"
+                  >
+                    <XCircle className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Contenders & Official Solution Tab Navigation Bar */}
+              <div className="px-4 py-2.5 bg-[#161b22] border-b border-[#30363d] flex items-center gap-2 overflow-x-auto shrink-0">
+                <span className="text-[10px] font-bold uppercase text-gray-400 tracking-wider shrink-0 mr-1">
+                  Select Code:
+                </span>
+
+                {/* Official Solution Tab */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedReviewTab('official');
+                    if (isCompareMode) setIsCompareMode(false);
+                  }}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer shrink-0 ${
+                    selectedReviewTab === 'official' && !isCompareMode
+                      ? 'bg-gradient-to-r from-emerald-950/80 to-indigo-950/80 text-emerald-300 border-emerald-500/60 shadow-md shadow-emerald-950/50'
+                      : 'bg-[#0d1117] text-gray-400 hover:text-gray-200 border-[#30363d] hover:border-gray-600'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                  <span>✨ Official Optimal Solution</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-mono">
+                    100/100
+                  </span>
+                </button>
+
+                <div className="h-5 w-[1px] bg-[#30363d] shrink-0 mx-1" />
+
+                {/* Contenders Tabs */}
+                {leaderboardData.map((player) => {
+                  const isSelected = selectedReviewTab === player.id;
+                  const isMe = player.id === socket?.id;
+                  const isPassed = player.status === 'Accepted';
+
+                  return (
+                    <button
+                      key={player.id}
+                      type="button"
+                      onClick={() => setSelectedReviewTab(player.id)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer shrink-0 ${
+                        isSelected
+                          ? isPassed
+                            ? 'bg-indigo-950/60 text-indigo-200 border-indigo-500/60 shadow-md'
+                            : 'bg-rose-950/50 text-rose-200 border-rose-500/60 shadow-md'
+                          : 'bg-[#0d1117] text-gray-400 hover:text-gray-200 border-[#30363d] hover:border-gray-600'
+                      }`}
+                    >
+                      <span
+                        className={`w-5 h-5 rounded-full text-white font-bold text-[10px] flex items-center justify-center shrink-0 ${
+                          isPassed
+                            ? 'bg-gradient-to-tr from-emerald-500 to-indigo-600'
+                            : 'bg-gradient-to-tr from-rose-600 to-gray-700'
+                        }`}
+                      >
+                        {player.nickname.charAt(0).toUpperCase()}
+                      </span>
+                      <span className="truncate max-w-[110px]">
+                        {player.nickname} {isMe && '(You)'}
+                      </span>
+                      {player.isBot && <Bot className="w-3.5 h-3.5 text-cyan-400" title="AI Bot Contender" />}
+                      <span
+                        className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                          isPassed
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        }`}
+                      >
+                        {isPassed ? 'Accepted' : 'Wrong'}
+                      </span>
+                      <span className="text-[10px] font-mono text-gray-400">
+                        {player.overallScore ?? player.accuracyScore}%
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Main Content Area */}
+              <div className="flex-1 min-h-0 bg-[#0d1117] p-3 sm:p-4 overflow-hidden">
+                {isCompareMode ? (
+                  /* ----------------- SIDE BY SIDE COMPARISON VIEW ----------------- */
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 h-full min-h-0">
+                    {/* Left Column: Contender Code */}
+                    <div className="flex flex-col h-full min-h-0 bg-[#161b22] border border-[#30363d] rounded-xl overflow-hidden shadow">
+                      {/* Sub-Header */}
+                      <div className="px-3.5 py-2.5 bg-[#161b22] border-b border-[#30363d] flex items-center justify-between gap-2 shrink-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className={`w-6 h-6 rounded-full text-white font-bold text-xs flex items-center justify-center shrink-0 ${
+                              activeContender?.status === 'Accepted'
+                                ? 'bg-gradient-to-tr from-emerald-500 to-indigo-600'
+                                : 'bg-gradient-to-tr from-rose-600 to-gray-700'
+                            }`}
+                          >
+                            {activeContender?.nickname?.charAt(0).toUpperCase() || 'P'}
+                          </span>
+                          <span className="font-bold text-white text-xs truncate">
+                            {activeContender?.nickname} {activeContender?.id === socket?.id && '(You)'}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-[#21262d] text-gray-300 border border-[#30363d]">
+                            {activeContender?.language || 'Code'}
+                          </span>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                              activeContender?.status === 'Accepted'
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            }`}
+                          >
+                            {activeContender?.status === 'Accepted' ? 'Accepted ✅' : `${activeContender?.status || 'Wrong Answer'} ❌`}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCopyReviewCode(activeContender?.code)}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium bg-[#21262d] hover:bg-[#30363d] text-gray-300 transition cursor-pointer shrink-0"
+                          title="Copy contender code"
+                        >
+                          {copiedReviewCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedReviewCode ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+
+                      {/* Editor */}
+                      <div className="flex-1 min-h-[220px] relative overflow-hidden">
+                        <Editor
+                          height="100%"
+                          language={getMonacoLang(activeContender?.language)}
+                          theme="vs-dark"
+                          value={activeContender?.code || '// No code submitted by this participant'}
+                          options={{
+                            readOnly: true,
+                            minimap: { enabled: false },
+                            fontSize: 13,
+                            lineNumbers: 'on',
+                            scrollBeyondLastLine: false,
+                            automaticLayout: true,
+                            fontFamily: "'Fira Code', 'Cascadia Code', Consolas, monospace",
+                            wordWrap: 'on',
+                            renderLineHighlight: 'all',
+                            folding: true
+                          }}
+                        />
+                      </div>
+
+                      {/* Contender Diagnostics Footer */}
+                      <div className="p-3 bg-[#11161d] border-t border-[#30363d] shrink-0 space-y-2 max-h-[160px] overflow-y-auto">
+                        {activeContender?.status !== 'Accepted' ? (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-1.5 text-rose-400 text-xs font-bold">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>Failure Diagnostic: {activeContender?.reason || activeContender?.feedback || 'Output mismatch with problem test cases.'}</span>
+                            </div>
+                            {(activeContender?.actualOutput || activeContender?.expectedOutput) && (
+                              <div className="grid grid-cols-2 gap-2 font-mono text-[10px]">
+                                <div className="bg-[#0d1117] p-2 rounded border border-rose-500/40">
+                                  <span className="text-gray-400 block text-[9px] uppercase font-bold">Their Output</span>
+                                  <div className="text-rose-300 break-all whitespace-pre-wrap mt-0.5 font-semibold">
+                                    {activeContender?.actualOutput || '(No output)'}
+                                  </div>
+                                </div>
+                                <div className="bg-[#0d1117] p-2 rounded border border-emerald-500/40">
+                                  <span className="text-gray-400 block text-[9px] uppercase font-bold">Expected Output</span>
+                                  <div className="text-emerald-400 break-all whitespace-pre-wrap mt-0.5 font-semibold">
+                                    {activeContender?.expectedOutput || currentProblem?.testCases?.[0]?.expected || 'Correct output'}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-300 space-y-1">
+                            <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>Accepted ({activeContender?.accuracyScore}% Accuracy, Score: {activeContender?.overallScore ?? activeContender?.accuracyScore}/100)</span>
+                            </div>
+                            {activeContender?.feedback && (
+                              <div className="text-gray-400 text-[11px] italic">"{activeContender.feedback}"</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right Column: Official Correct Solution */}
+                    <div className="flex flex-col h-full min-h-0 bg-[#161b22] border border-emerald-500/30 rounded-xl overflow-hidden shadow">
+                      {/* Sub-Header */}
+                      <div className="px-3.5 py-2.5 bg-[#161b22] border-b border-[#30363d] flex items-center justify-between gap-2 shrink-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span className="font-bold text-emerald-300 text-xs truncate">
+                            Official Verified Solution
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
+                            100% Score
+                          </span>
+
+                          {/* Language selector for official solution */}
+                          {officialSolutions.length > 1 && (
+                            <div className="flex items-center gap-1 ml-1">
+                              {officialSolutions.map((sol, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => setSelectedOfficialLangIndex(idx)}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium transition cursor-pointer ${
+                                    selectedOfficialLangIndex === idx
+                                      ? 'bg-emerald-600 text-white'
+                                      : 'bg-[#21262d] text-gray-400 hover:text-white'
+                                  }`}
+                                >
+                                  {sol.language?.toUpperCase() || `Option ${idx + 1}`}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCopyReviewCode(activeOfficialSolution?.code)}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium bg-[#21262d] hover:bg-[#30363d] text-gray-300 transition cursor-pointer shrink-0"
+                          title="Copy official solution code"
+                        >
+                          {copiedReviewCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedReviewCode ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+
+                      {/* Editor */}
+                      <div className="flex-1 min-h-[220px] relative overflow-hidden">
+                        <Editor
+                          height="100%"
+                          language={getMonacoLang(activeOfficialSolution?.language)}
+                          theme="vs-dark"
+                          value={activeOfficialSolution?.code || '// Reference solution'}
+                          options={{
+                            readOnly: true,
+                            minimap: { enabled: false },
+                            fontSize: 13,
+                            lineNumbers: 'on',
+                            scrollBeyondLastLine: false,
+                            automaticLayout: true,
+                            fontFamily: "'Fira Code', 'Cascadia Code', Consolas, monospace",
+                            wordWrap: 'on',
+                            renderLineHighlight: 'all',
+                            folding: true
+                          }}
+                        />
+                      </div>
+
+                      {/* Official Explanation Footer */}
+                      <div className="p-3 bg-[#11161d] border-t border-[#30363d] shrink-0 space-y-1 text-xs max-h-[160px] overflow-y-auto">
+                        <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                          <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                          <span>Optimal Complexity & Explanation</span>
+                        </div>
+                        <p className="text-gray-300 text-[11px] leading-relaxed">
+                          {activeOfficialSolution?.feedback || 'Optimal algorithm passing all test cases within minimal time and memory limits.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : isViewingOfficialOnly ? (
+                  /* ----------------- SINGLE VIEW: OFFICIAL SOLUTION ----------------- */
+                  <div className="flex flex-col h-full min-h-0 bg-[#161b22] border border-emerald-500/40 rounded-xl overflow-hidden shadow-xl">
+                    {/* Header Bar */}
+                    <div className="px-4 py-3 bg-[#161b22] border-b border-[#30363d] flex flex-wrap items-center justify-between gap-3 shrink-0">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white text-sm">Official Optimal Solution</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
+                              100/100 Score
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-gray-400">
+                            Verified reference solution for {currentProblem?.title}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Language Selector */}
+                        {officialSolutions.length > 1 && (
+                          <div className="flex items-center gap-1 bg-[#0d1117] p-1 rounded-lg border border-[#30363d]">
+                            {officialSolutions.map((sol, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setSelectedOfficialLangIndex(idx)}
+                                className={`px-2.5 py-1 rounded text-xs font-mono font-semibold transition cursor-pointer ${
+                                  selectedOfficialLangIndex === idx
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'text-gray-400 hover:text-white'
+                                }`}
+                              >
+                                {sol.language?.toUpperCase() || `Option ${idx + 1}`}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setIsCompareMode(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/30 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/40 transition cursor-pointer"
+                        >
+                          <Split className="w-3.5 h-3.5" />
+                          <span>Compare with Contender</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCopyReviewCode(activeOfficialSolution?.code)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#21262d] hover:bg-[#30363d] text-gray-300 transition cursor-pointer"
+                        >
+                          {copiedReviewCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedReviewCode ? 'Copied' : 'Copy Code'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Monaco Editor */}
+                    <div className="flex-1 min-h-[300px] relative overflow-hidden">
+                      <Editor
+                        height="100%"
+                        language={getMonacoLang(activeOfficialSolution?.language)}
+                        theme="vs-dark"
+                        value={activeOfficialSolution?.code || '// Reference solution'}
+                        options={{
+                          readOnly: true,
+                          minimap: { enabled: true },
+                          fontSize: 13.5,
+                          lineNumbers: 'on',
+                          scrollBeyondLastLine: false,
+                          automaticLayout: true,
+                          fontFamily: "'Fira Code', 'Cascadia Code', Consolas, monospace",
+                          wordWrap: 'on',
+                          renderLineHighlight: 'all',
+                          folding: true
+                        }}
+                      />
+                    </div>
+
+                    {/* Footer Complexity Card */}
+                    <div className="p-4 bg-[#11161d] border-t border-[#30363d] shrink-0 flex items-start gap-3">
+                      <BookOpen className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <div className="font-bold text-white text-xs">Solution Complexity & Algorithmic Design</div>
+                        <p className="text-gray-300 text-xs leading-relaxed">
+                          {activeOfficialSolution?.feedback || 'Optimal asymptotic complexity with linear execution and minimal extra memory usage.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* ----------------- SINGLE VIEW: CONTENDER SOLUTION ----------------- */
+                  <div className="flex flex-col h-full min-h-0 bg-[#161b22] border border-[#30363d] rounded-xl overflow-hidden shadow-xl">
+                    {/* Header Bar */}
+                    <div className="px-4 py-3 bg-[#161b22] border-b border-[#30363d] flex flex-wrap items-center justify-between gap-3 shrink-0">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`w-8 h-8 rounded-full text-white font-bold text-sm flex items-center justify-center shrink-0 ${
+                            activeContender?.status === 'Accepted'
+                              ? 'bg-gradient-to-tr from-emerald-500 to-indigo-600'
+                              : 'bg-gradient-to-tr from-rose-600 to-gray-700'
+                          }`}
+                        >
+                          {activeContender?.nickname?.charAt(0).toUpperCase() || 'P'}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white text-sm">
+                              {activeContender?.nickname}'s Submission
+                            </span>
+                            {activeContender?.id === socket?.id && (
+                              <span className="text-[11px] text-indigo-400 font-bold">(You)</span>
+                            )}
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                                activeContender?.status === 'Accepted'
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                              }`}
+                            >
+                              {activeContender?.status === 'Accepted' ? 'Accepted ✅' : `${activeContender?.status || 'Wrong Answer'} ❌`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5">
+                            <span>Language: <strong className="text-gray-200">{activeContender?.language || 'Python'}</strong></span>
+                            <span>•</span>
+                            <span>Time: <strong className="text-gray-200">{activeContender?.timeTaken}</strong></span>
+                            <span>•</span>
+                            <span>Score: <strong className="text-gray-200">{activeContender?.overallScore ?? activeContender?.accuracyScore}/100</strong></span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsCompareMode(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/30 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/40 transition cursor-pointer"
+                        >
+                          <Split className="w-3.5 h-3.5" />
+                          <span>Compare Side-by-Side</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCopyReviewCode(activeContender?.code)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#21262d] hover:bg-[#30363d] text-gray-300 transition cursor-pointer"
+                        >
+                          {copiedReviewCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedReviewCode ? 'Copied' : 'Copy Code'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Monaco Editor */}
+                    <div className="flex-1 min-h-[300px] relative overflow-hidden">
+                      <Editor
+                        height="100%"
+                        language={getMonacoLang(activeContender?.language)}
+                        theme="vs-dark"
+                        value={activeContender?.code || '// No code submitted by this participant'}
+                        options={{
+                          readOnly: true,
+                          minimap: { enabled: true },
+                          fontSize: 13.5,
+                          lineNumbers: 'on',
+                          scrollBeyondLastLine: false,
+                          automaticLayout: true,
+                          fontFamily: "'Fira Code', 'Cascadia Code', Consolas, monospace",
+                          wordWrap: 'on',
+                          renderLineHighlight: 'all',
+                          folding: true
+                        }}
+                      />
+                    </div>
+
+                    {/* Diagnostic / AI Feedback Footer */}
+                    <div className="p-4 bg-[#11161d] border-t border-[#30363d] shrink-0 space-y-2">
+                      {activeContender?.status !== 'Accepted' ? (
+                        <div className="bg-rose-950/30 border border-rose-500/40 rounded-xl p-3 text-xs space-y-2">
+                          <div className="flex items-center gap-2 text-rose-300 font-bold">
+                            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                            <span>Failure Reason: {activeContender?.reason || activeContender?.feedback || 'Output mismatch with problem test cases.'}</span>
+                          </div>
+                          {(activeContender?.actualOutput || activeContender?.expectedOutput) && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px] pt-1">
+                              <div className="bg-[#0d1117] p-2.5 rounded-lg border border-rose-500/40">
+                                <span className="text-gray-400 block text-[9px] uppercase font-bold tracking-wider">Contender Output</span>
+                                <div className="text-rose-300 break-all whitespace-pre-wrap mt-0.5 font-semibold">
+                                  {activeContender?.actualOutput || '(No output)'}
+                                </div>
+                              </div>
+                              <div className="bg-[#0d1117] p-2.5 rounded-lg border border-emerald-500/40">
+                                <span className="text-gray-400 block text-[9px] uppercase font-bold tracking-wider">Expected Correct Output</span>
+                                <div className="text-emerald-400 break-all whitespace-pre-wrap mt-0.5 font-semibold">
+                                  {activeContender?.expectedOutput || currentProblem?.testCases?.[0]?.expected || 'Correct output'}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-3 text-xs flex items-start gap-2.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <div className="space-y-0.5">
+                            <div className="text-emerald-300 font-bold">Solution Accepted ({activeContender?.accuracyScore}% Accuracy)</div>
+                            {activeContender?.feedback && (
+                              <div className="text-gray-300 text-[11px] italic">"{activeContender.feedback}"</div>
+                            )}
+                            <div className="text-gray-400 text-[10px] font-mono">
+                              Time: {activeContender?.timeComplexity || 'Optimal'} | Space: {activeContender?.spaceComplexity || 'Optimal'}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-4 py-2.5 bg-[#161b22] border-t border-[#30363d] flex items-center justify-between shrink-0 text-xs">
+                <div className="text-gray-400 flex items-center gap-2">
+                  <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Code is read-only for post-match analysis.</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCodeReviewModal(false);
+                      setShowLeaderboardModal(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#21262d] hover:bg-[#30363d] text-gray-200 border border-[#30363d] transition cursor-pointer"
+                  >
+                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Back to Leaderboard</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCodeReviewModal(false)}
+                    className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow transition cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -899,7 +899,9 @@ function calculateLeaderboard(room) {
       actualOutput: p.evaluation?.actual_output || null,
       expectedOutput: p.evaluation?.expected_output || null,
       reason: p.evaluation?.reason || p.evaluation?.feedback || null,
-      language: p.language || 'Python'
+      code: p.code || '',
+      isBot: Boolean(p.isBot),
+      language: p.language || 'python'
     };
   });
 }
@@ -951,7 +953,8 @@ async function handleBattleEnd(roomCode, reason = 'completed') {
     roomCode,
     leaderboard,
     winner,
-    reason
+    reason,
+    problem: room.problem
   });
 
   io.to(roomCode).emit('room_state', serializeRoom(room));
