@@ -36,7 +36,10 @@ import {
   BookOpen,
   Split,
   Eye,
-  ArrowLeft
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  ListFilter
 } from 'lucide-react';
 import { LEETCODE_PROBLEM_BANK } from './leetcode_bank.js';
 
@@ -154,6 +157,81 @@ export default function LeetCodePlatform() {
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [copiedReviewCode, setCopiedReviewCode] = useState(false);
   const [selectedOfficialLangIndex, setSelectedOfficialLangIndex] = useState(0);
+
+  // Solo Practice Sequential Line-by-Line Question Track & Completion
+  const [completedQuestions, setCompletedQuestions] = useState(() => {
+    try {
+      const saved = localStorage.getItem('code_arena_completed_questions');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch (e) {
+      return new Set();
+    }
+  });
+  const [showQuestionRoadmap, setShowQuestionRoadmap] = useState(false);
+  const [soloCategory, setSoloCategory] = useState('all'); // 'all' | 'Python Basics' | 'Algorithms'
+  const [searchRoadmapQuery, setSearchRoadmapQuery] = useState('');
+
+  const toggleQuestionCompleted = (problemId) => {
+    setCompletedQuestions((prev) => {
+      const next = new Set(prev);
+      const isNowCompleted = !next.has(problemId);
+      if (isNowCompleted) {
+        next.add(problemId);
+        setBattleToast({
+          title: '🎉 Marked Completed!',
+          message: 'Question marked as completed in your Solo Track.'
+        });
+        setTimeout(() => setBattleToast(null), 3000);
+      } else {
+        next.delete(problemId);
+      }
+      try {
+        localStorage.setItem('code_arena_completed_questions', JSON.stringify([...next]));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const markQuestionCompleted = (problemId) => {
+    setCompletedQuestions((prev) => {
+      if (prev.has(problemId)) return prev;
+      const next = new Set(prev);
+      next.add(problemId);
+      try {
+        localStorage.setItem('code_arena_completed_questions', JSON.stringify([...next]));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  // Filtered problem progression list
+  const filteredSoloProblems = LEETCODE_PROBLEM_BANK.filter((p) => {
+    if (soloCategory === 'Python Basics') return p.category === 'Python Basics' || p.tags?.includes('Python Basics');
+    if (soloCategory === 'Algorithms') return p.category !== 'Python Basics' && !p.tags?.includes('Python Basics');
+    return true;
+  });
+
+  const currentProblemIndex = filteredSoloProblems.findIndex((p) => p.id === currentProblem?.id);
+  const activeIndex = currentProblemIndex >= 0 ? currentProblemIndex : 0;
+  const hasPrevQuestion = activeIndex > 0;
+  const hasNextQuestion = activeIndex < filteredSoloProblems.length - 1;
+
+  const handlePrevQuestion = () => {
+    if (hasPrevQuestion) {
+      setCurrentProblem(filteredSoloProblems[activeIndex - 1]);
+    }
+  };
+
+  const handleNextQuestion = () => {
+    if (hasNextQuestion) {
+      setCurrentProblem(filteredSoloProblems[activeIndex + 1]);
+    }
+  };
+
+  const handleSelectProblem = (prob) => {
+    setCurrentProblem(prob);
+    setShowQuestionRoadmap(false);
+  };
 
   const handleCopyReviewCode = (code) => {
     if (!code) return;
@@ -633,8 +711,67 @@ export default function LeetCodePlatform() {
     }
   };
 
-  // Submit to Arena (Evaluates via Gemini AI and records battle result)
+  // Submit Solution: In Arena evaluates via battle engine; In Solo Practice evaluates via /api/verify and auto-marks completed!
   const handleArenaSubmit = async () => {
+    // Solo Practice Mode Submit
+    if (!inRoom) {
+      if (isSubmitting) return;
+      setIsSubmitting(true);
+      setBottomTab('ai-feedback');
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_code: currentCode,
+            language: LANGUAGE_LABELS[selectedLanguage]?.label || selectedLanguage,
+            execution_output: { stdout: executionData.stdout.join('\n') },
+            problem: currentProblem
+          })
+        });
+
+        const evalResult = await response.json();
+        const isCorrect = Boolean(evalResult.is_correct) || evalResult.verdict === 'Accepted';
+
+        setAiAnalysis({
+          isCorrect,
+          score: evalResult.overall_score ?? evalResult.score ?? (isCorrect ? 100 : 20),
+          verdict: evalResult.verdict || (isCorrect ? 'Accepted' : 'Wrong Answer'),
+          actualOutput: evalResult.actual_output || null,
+          expectedOutput: evalResult.expected_output || null,
+          reason: evalResult.reason || evalResult.feedback,
+          feedback: evalResult.feedback,
+          timeComplexity: evalResult.time_complexity,
+          spaceComplexity: evalResult.space_complexity,
+          hints: evalResult.hints || [],
+          engine: evalResult.engine || 'Gemini 2.5 Flash'
+        });
+
+        if (isCorrect) {
+          markQuestionCompleted(currentProblem.id);
+          setBattleToast({
+            title: '🎉 Problem Solved!',
+            message: `Awesome! "${currentProblem.title}" is marked as Completed.`
+          });
+          setTimeout(() => setBattleToast(null), 4000);
+        }
+      } catch (err) {
+        setAiAnalysis({
+          isCorrect: false,
+          score: 0,
+          verdict: 'Error',
+          feedback: `Evaluation failed: ${err.message}`,
+          hints: ['Ensure backend server is running on port 5000.'],
+          engine: 'Local Evaluator'
+        });
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    // Arena Multiplayer Mode Submit
     if (!socket || !roomState) {
       alert('Please join an arena room to submit.');
       return;
@@ -821,9 +958,16 @@ export default function LeetCodePlatform() {
 
           {!inRoom && (
             <div className="flex items-center space-x-2">
-              <span className="hidden sm:inline-block text-[11px] text-gray-400 bg-[#21262d] px-2.5 py-1 rounded border border-[#30363d]">
-                Solo Sandbox Mode
-              </span>
+              <button
+                type="button"
+                onClick={() => setShowQuestionRoadmap(true)}
+                className="flex items-center space-x-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-500/30 transition cursor-pointer"
+                title="View line-by-line questions curriculum"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Practice Track ({completedQuestions.size}/{LEETCODE_PROBLEM_BANK.length})</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setShowLobbyModal(true)}
@@ -859,6 +1003,74 @@ export default function LeetCodePlatform() {
           style={{ width: `${horizontalSplit}%` }}
           className="h-full flex flex-col bg-[#0d1117] border-r border-[#30363d] overflow-hidden shrink-0 min-w-[320px]"
         >
+          {/* Solo Line-by-Line Question Navigation & Progress Bar */}
+          {!inRoom && (
+            <div className="px-3.5 py-2.5 bg-[#161b22] border-b border-[#30363d] flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setShowQuestionRoadmap(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 transition cursor-pointer"
+                  title="Open line-by-line questions list"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Curriculum</span>
+                </button>
+
+                <select
+                  value={soloCategory}
+                  onChange={(e) => setSoloCategory(e.target.value)}
+                  className="bg-[#0d1117] text-gray-300 border border-[#30363d] rounded-lg px-2 py-1 text-[11px] font-medium outline-none cursor-pointer"
+                  title="Filter track by category"
+                >
+                  <option value="all">All Tracks ({LEETCODE_PROBLEM_BANK.length})</option>
+                  <option value="Python Basics">🐍 Python Basics (10)</option>
+                  <option value="Algorithms">⚡ LeetCode Curated (7)</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[11px] font-mono text-gray-400">
+                  {activeIndex + 1} / {filteredSoloProblems.length}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handlePrevQuestion}
+                  disabled={!hasPrevQuestion}
+                  className="p-1 rounded bg-[#21262d] hover:bg-[#30363d] disabled:opacity-30 disabled:cursor-not-allowed text-gray-300 transition cursor-pointer"
+                  title="Previous Question in sequence"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleNextQuestion}
+                  disabled={!hasNextQuestion}
+                  className="p-1 rounded bg-[#21262d] hover:bg-[#30363d] disabled:opacity-30 disabled:cursor-not-allowed text-gray-300 transition cursor-pointer"
+                  title="Next Question in sequence"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => toggleQuestionCompleted(currentProblem.id)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    completedQuestions.has(currentProblem.id)
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm'
+                      : 'bg-[#21262d] text-gray-300 border border-[#30363d] hover:text-white hover:border-gray-500'
+                  }`}
+                  title={completedQuestions.has(currentProblem.id) ? 'Mark as Incomplete' : 'Mark question as Completed'}
+                >
+                  <CheckCircle2 className={`w-3.5 h-3.5 ${completedQuestions.has(currentProblem.id) ? 'text-emerald-400' : 'text-gray-400'}`} />
+                  <span>{completedQuestions.has(currentProblem.id) ? 'Completed' : 'Mark Done'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Problem Header Section */}
           <div className="p-4 border-b border-[#30363d] bg-[#161b22]/70 shrink-0">
             <div className="flex items-center justify-between">
@@ -1227,16 +1439,24 @@ export default function LeetCodePlatform() {
 
                 <button
                   onClick={handleArenaSubmit}
-                  disabled={isSubmitting || hasSubmitted || isTimeExpired || isBattleEnded}
+                  disabled={inRoom ? (isSubmitting || hasSubmitted || isTimeExpired || isBattleEnded) : isSubmitting}
                   className="flex items-center space-x-1.5 px-3.5 py-1 rounded text-xs font-bold bg-gradient-to-r from-amber-600 via-emerald-600 to-teal-600 hover:from-amber-500 hover:to-teal-500 text-white shadow-md shadow-emerald-500/20 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  title="Submit code for battle evaluation"
+                  title={inRoom ? 'Submit code for battle evaluation' : 'Submit solution to verify and mark completed'}
                 >
                   {isSubmitting ? (
                     <Sparkles className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <Send className="w-3.5 h-3.5" />
                   )}
-                  <span>{hasSubmitted ? 'Submitted ✅' : 'Submit to Arena ⚔️'}</span>
+                  <span>
+                    {inRoom
+                      ? hasSubmitted
+                        ? 'Submitted ✅'
+                        : 'Submit to Arena ⚔️'
+                      : completedQuestions.has(currentProblem.id)
+                      ? 'Resubmit Solution ✨'
+                      : 'Submit Solution ✨'}
+                  </span>
                 </button>
               </div>
             </div>
@@ -1426,6 +1646,24 @@ export default function LeetCodePlatform() {
                       </div>
                     )}
                   </div>
+
+                  {/* Solo Practice Next Question Banner */}
+                  {!inRoom && aiAnalysis.isCorrect && hasNextQuestion && (
+                    <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-500/50 flex items-center justify-between gap-2 animate-in fade-in">
+                      <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Question Solved & Marked Completed! Ready for the next one?</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleNextQuestion}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow transition cursor-pointer shrink-0"
+                      >
+                        <span>Next Question</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1653,11 +1891,20 @@ export default function LeetCodePlatform() {
                         }}
                         className="w-full bg-[#0d1117] text-white text-xs px-3 py-2 rounded-lg border border-[#30363d] focus:outline-none focus:ring-1 focus:ring-amber-500 appearance-none cursor-pointer"
                       >
-                        {LEETCODE_PROBLEM_BANK.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.title} ({p.difficulty}) - {p.tags.slice(0, 2).join(', ')}
-                          </option>
-                        ))}
+                        <optgroup label="🐍 Python Basics (10 Questions)">
+                          {LEETCODE_PROBLEM_BANK.filter((p) => p.category === 'Python Basics' || p.tags?.includes('Python Basics')).map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.title} ({p.difficulty})
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="⚡ LeetCode Algorithmic Bank (7 Questions)">
+                          {LEETCODE_PROBLEM_BANK.filter((p) => p.category !== 'Python Basics' && !p.tags?.includes('Python Basics')).map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.title} ({p.difficulty})
+                            </option>
+                          ))}
+                        </optgroup>
                       </select>
                       <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
@@ -2591,6 +2838,240 @@ export default function LeetCodePlatform() {
                     Done
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* 6. SOLO LINE-BY-LINE QUESTION CURRICULUM DRAWER                    */}
+      {/* ------------------------------------------------------------------ */}
+      {showQuestionRoadmap && (() => {
+        const totalCount = LEETCODE_PROBLEM_BANK.length;
+        const completedCount = completedQuestions.size;
+        const percent = Math.round((completedCount / totalCount) * 100);
+
+        const displayedQuestions = LEETCODE_PROBLEM_BANK.filter((p) => {
+          const matchesCategory =
+            soloCategory === 'all'
+              ? true
+              : soloCategory === 'Python Basics'
+              ? p.category === 'Python Basics' || p.tags?.includes('Python Basics')
+              : p.category !== 'Python Basics' && !p.tags?.includes('Python Basics');
+
+          const matchesQuery =
+            !searchRoadmapQuery.trim() ||
+            p.title.toLowerCase().includes(searchRoadmapQuery.toLowerCase()) ||
+            p.tags?.some((t) => t.toLowerCase().includes(searchRoadmapQuery.toLowerCase()));
+
+          return matchesCategory && matchesQuery;
+        });
+
+        const nextUnsolved = LEETCODE_PROBLEM_BANK.find((p) => !completedQuestions.has(p.id));
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex justify-start animate-in fade-in duration-150">
+            <div className="w-full max-w-lg bg-[#161b22] border-r border-[#30363d] h-full flex flex-col shadow-2xl overflow-hidden">
+              {/* Drawer Top Header */}
+              <div className="p-4 border-b border-[#30363d] bg-[#0d1117] flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shrink-0">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white">Solo Practice Track</h2>
+                    <p className="text-xs text-gray-400">Solve line-by-line questions and track your progress.</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowQuestionRoadmap(false)}
+                  className="p-1.5 text-gray-400 hover:text-white hover:bg-[#21262d] rounded-lg transition cursor-pointer"
+                  title="Close Drawer"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Progress Summary Card */}
+              <div className="p-4 bg-[#11161d] border-b border-[#30363d] space-y-3 shrink-0">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-gray-300">Overall Progress</span>
+                  <span className="font-mono text-emerald-400 font-bold">
+                    {completedCount} / {totalCount} Solved ({percent}%)
+                  </span>
+                </div>
+
+                {/* Animated Progress Bar */}
+                <div className="w-full h-2 rounded-full bg-[#21262d] overflow-hidden border border-[#30363d]">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500 transition-all duration-300 rounded-full"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+
+                {/* Category Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setSoloCategory('all')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
+                      soloCategory === 'all'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-[#21262d] text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    All ({totalCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSoloCategory('Python Basics')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
+                      soloCategory === 'Python Basics'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-[#21262d] text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    🐍 Python Basics (10)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSoloCategory('Algorithms')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer shrink-0 ${
+                      soloCategory === 'Algorithms'
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-[#21262d] text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    ⚡ LeetCode Bank (7)
+                  </button>
+                </div>
+
+                {/* Search Filter */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search question name or tag..."
+                    value={searchRoadmapQuery}
+                    onChange={(e) => setSearchRoadmapQuery(e.target.value)}
+                    className="w-full bg-[#0d1117] text-white text-xs pl-8 pr-3 py-1.5 rounded-lg border border-[#30363d] focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Questions Line-by-Line List */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {displayedQuestions.map((q, idx) => {
+                  const isCompleted = completedQuestions.has(q.id);
+                  const isCurrent = currentProblem?.id === q.id;
+
+                  return (
+                    <div
+                      key={q.id}
+                      onClick={() => handleSelectProblem(q)}
+                      className={`p-3 rounded-xl border transition cursor-pointer flex items-center justify-between gap-3 ${
+                        isCurrent
+                          ? 'bg-indigo-950/40 border-indigo-500 shadow-md ring-1 ring-indigo-500/40'
+                          : isCompleted
+                          ? 'bg-[#0d1117]/80 border-emerald-500/30 hover:border-emerald-500/50'
+                          : 'bg-[#0d1117] border-[#30363d] hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 min-w-0">
+                        {/* Checkbox */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleQuestionCompleted(q.id);
+                          }}
+                          className={`mt-0.5 w-5 h-5 rounded-md flex items-center justify-center border transition shrink-0 cursor-pointer ${
+                            isCompleted
+                              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                              : 'border-gray-600 hover:border-gray-400 text-transparent'
+                          }`}
+                          title={isCompleted ? 'Mark Incomplete' : 'Mark Completed'}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-xs font-bold truncate ${isCurrent ? 'text-indigo-300' : 'text-white'}`}>
+                              {q.title}
+                            </span>
+                            {isCurrent && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 font-bold">
+                                Current ⚡
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span
+                              className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
+                                q.difficulty === 'Easy'
+                                  ? 'bg-emerald-500/20 text-emerald-400'
+                                  : q.difficulty === 'Medium'
+                                  ? 'bg-amber-500/20 text-amber-400'
+                                  : 'bg-rose-500/20 text-rose-400'
+                              }`}
+                            >
+                              {q.difficulty}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              {q.category || (q.tags?.includes('Python Basics') ? 'Python Basics' : 'Algorithms')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isCompleted && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            Solved ✅
+                          </span>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Drawer Footer Actions */}
+              <div className="p-3 bg-[#0d1117] border-t border-[#30363d] flex items-center justify-between gap-2 shrink-0 text-xs">
+                {nextUnsolved ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectProblem(nextUnsolved)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow transition cursor-pointer"
+                  >
+                    <span>Solve Next Unsolved</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <span className="text-emerald-400 font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>All Questions Solved! 🏆</span>
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Reset all completed question marks?')) {
+                      setCompletedQuestions(new Set());
+                      localStorage.removeItem('code_arena_completed_questions');
+                    }
+                  }}
+                  className="text-[11px] text-gray-400 hover:text-rose-400 transition cursor-pointer"
+                >
+                  Reset Track
+                </button>
               </div>
             </div>
           </div>

@@ -792,7 +792,8 @@ app.post('/api/verify', async (req, res) => {
     if (!user_code || user_code.trim() === '') {
       return res.status(400).json({ error: 'user_code is required' });
     }
-    const result = await evaluateSubmissionWithAi(user_code, language, execution_output, problem);
+    const effectiveExecutionOutput = await getExecutionOutput(user_code, language, execution_output);
+    const result = await evaluateSubmissionWithAi(user_code, language, effectiveExecutionOutput, problem);
     return res.status(200).json(result);
   } catch (err) {
     return res.status(500).json({ error: 'AI verification failed', details: err.message });
