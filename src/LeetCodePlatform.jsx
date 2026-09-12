@@ -282,10 +282,13 @@ export default function LeetCodePlatform() {
       setAiAnalysis({
         isCorrect: Boolean(evaluation.is_correct),
         score: evaluation.overall_score ?? evaluation.score,
-        accuracyScore: evaluation.accuracy_score ?? 100,
-        codeQualityScore: evaluation.code_quality_score ?? 85,
+        accuracyScore: evaluation.accuracy_score ?? (evaluation.is_correct ? 100 : 0),
+        codeQualityScore: evaluation.code_quality_score ?? (evaluation.is_correct ? 85 : 20),
         overallScore: evaluation.overall_score ?? evaluation.score,
         verdict: evaluation.verdict || (evaluation.is_correct ? 'Accepted' : 'Wrong Answer'),
+        actualOutput: evaluation.actual_output || null,
+        expectedOutput: evaluation.expected_output || null,
+        reason: evaluation.reason || evaluation.feedback,
         feedback: evaluation.feedback,
         timeComplexity: evaluation.time_complexity,
         spaceComplexity: evaluation.space_complexity,
@@ -1205,8 +1208,18 @@ export default function LeetCodePlatform() {
                     const testCasesList = currentProblem.testCases || TEST_CASES;
                     const tc = testCasesList[activeTestCaseIndex] || testCasesList[0];
                     if (!tc) return null;
+                    const stdoutClean = executionData.stdout
+                      ?.filter((l) => !l.startsWith('//') && !l.startsWith('[STDERR]'))
+                      .join('\n')
+                      .trim();
+                    const hasRun = executionData.status !== 'Ready';
+                    const expStr = String(tc.expected || '').trim();
+                    const normExp = expStr.replace(/\s+/g, '').toLowerCase();
+                    const normAct = (stdoutClean || '').replace(/\s+/g, '').toLowerCase();
+                    const isCaseMatch = hasRun && normAct.length > 0 && (normAct === normExp || normAct.includes(normExp));
+
                     return (
-                      <div className="p-3 bg-[#161b22] rounded-lg border border-[#30363d] space-y-2 text-xs font-mono">
+                      <div className="p-3 bg-[#161b22] rounded-lg border border-[#30363d] space-y-2.5 text-xs font-mono">
                         <div>
                           <span className="text-gray-400">Input: </span>
                           <span className="text-white font-mono">{tc.input || (tc.nums ? `nums = [${tc.nums.join(', ')}], target = ${tc.target}` : '')}</span>
@@ -1217,11 +1230,24 @@ export default function LeetCodePlatform() {
                             {tc.expected ? (typeof tc.expected === 'string' ? tc.expected : JSON.stringify(tc.expected)) : 'N/A'}
                           </span>
                         </div>
-                        <div>
-                          <span className="text-gray-400">Actual (Last Run): </span>
-                          <span className="text-indigo-300 font-bold font-mono">
-                            {executionData.status === 'Accepted' && tc.expected ? (typeof tc.expected === 'string' ? tc.expected : JSON.stringify(tc.expected)) : (executionData.status === 'Ready' ? '// Click "Run" to execute in sandbox' : executionData.status)}
-                          </span>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <span className="text-gray-400">Actual (Last Run): </span>
+                            <span className={`font-bold font-mono ${hasRun ? (isCaseMatch ? 'text-emerald-400' : 'text-rose-400') : 'text-gray-500'}`}>
+                              {hasRun ? (stdoutClean || executionData.status) : '// Click "Run" to execute in sandbox'}
+                            </span>
+                          </div>
+                          {hasRun && (
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold border shrink-0 ${
+                                isCaseMatch
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                  : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                              }`}
+                            >
+                              {isCaseMatch ? 'Passed ✅' : 'Wrong Answer ❌'}
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -1300,6 +1326,33 @@ export default function LeetCodePlatform() {
                       <span className="font-mono text-white font-bold">{aiAnalysis.spaceComplexity}</span>
                     </div>
                   </div>
+
+                  {/* Failure Reason & Output Comparison (When not accepted) */}
+                  {!aiAnalysis.isCorrect && (
+                    <div className="p-3 rounded-lg bg-rose-950/30 border border-rose-500/40 space-y-2">
+                      <div className="flex items-center space-x-2 text-rose-300 font-bold text-xs">
+                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>Submission Rejected: {aiAnalysis.verdict || 'Wrong Answer'}</span>
+                      </div>
+                      {aiAnalysis.reason && (
+                        <p className="text-xs text-rose-200 leading-relaxed font-sans">
+                          <strong className="text-rose-400">Reason: </strong>{aiAnalysis.reason}
+                        </p>
+                      )}
+                      {(aiAnalysis.actualOutput || aiAnalysis.expectedOutput) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-rose-900/50 font-mono text-[11px]">
+                          <div className="bg-[#0d1117] p-2 rounded border border-rose-500/30">
+                            <span className="text-gray-400 block text-[9px] uppercase font-bold">Your Program Output</span>
+                            <div className="text-rose-300 font-semibold break-all whitespace-pre-wrap mt-0.5">{aiAnalysis.actualOutput || '(No output)'}</div>
+                          </div>
+                          <div className="bg-[#0d1117] p-2 rounded border border-emerald-500/30">
+                            <span className="text-gray-400 block text-[9px] uppercase font-bold">Expected Output</span>
+                            <div className="text-emerald-400 font-semibold break-all whitespace-pre-wrap">{aiAnalysis.expectedOutput || currentProblem?.testCases?.[0]?.expected || 'Expected result'}</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="p-3 rounded-lg bg-[#161b22] border border-[#30363d] space-y-1.5 text-xs">
                     <span className="font-bold text-gray-300 text-[11px]">AI Evaluation & Feedback:</span>
@@ -1677,7 +1730,7 @@ export default function LeetCodePlatform() {
       {/* ------------------------------------------------------------------ */}
       {showLeaderboardModal && leaderboardData && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl bg-[#161b22] border border-amber-500/40 rounded-2xl shadow-2xl p-6 relative overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="w-full max-w-3xl bg-[#161b22] border border-amber-500/40 rounded-2xl shadow-2xl p-6 relative overflow-hidden flex flex-col max-h-[90vh]">
             {/* Winner Spotlight Banner */}
             <div className="text-center pb-4 border-b border-[#30363d] relative">
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/50 text-amber-400 mb-2 shadow-xl shadow-amber-500/20">
@@ -1700,7 +1753,7 @@ export default function LeetCodePlatform() {
             </div>
 
             {/* Leaderboard Table (Ranks 1st through 6th) */}
-            <div className="flex-1 overflow-y-auto my-4 space-y-2">
+            <div className="flex-1 overflow-y-auto my-4 space-y-2.5">
               <div className="grid grid-cols-12 text-[10px] uppercase font-bold text-gray-400 px-3 py-1.5 bg-[#0d1117] rounded-lg">
                 <div className="col-span-1">Rank</div>
                 <div className="col-span-4">Contender</div>
@@ -1711,25 +1764,33 @@ export default function LeetCodePlatform() {
 
               {leaderboardData.map((player) => {
                 const isMe = player.id === socket?.id;
+                const isPassed = player.status === 'Accepted';
+
                 return (
                   <div
                     key={player.id}
-                    className={`grid grid-cols-12 items-center text-xs p-3 rounded-xl border transition ${
+                    className={`grid grid-cols-12 items-center text-xs p-3.5 rounded-xl border transition ${
                       player.isWinner
                         ? 'bg-gradient-to-r from-amber-950/40 via-[#161b22] to-amber-950/30 border-amber-500/50 shadow-md'
+                        : isPassed
+                        ? isMe
+                          ? 'bg-indigo-950/30 border-indigo-500/40'
+                          : 'bg-[#0d1117] border-[#30363d]'
                         : isMe
-                        ? 'bg-indigo-950/30 border-indigo-500/40'
-                        : 'bg-[#0d1117] border-[#30363d]'
+                        ? 'bg-rose-950/20 border-rose-500/40'
+                        : 'bg-[#0d1117] border-rose-900/30'
                     }`}
                   >
                     {/* Rank */}
                     <div className="col-span-1 font-extrabold text-sm">
-                      {player.rank === 1 ? '🥇' : player.rank === 2 ? '🥈' : player.rank === 3 ? '🥉' : `#${player.rank}`}
+                      {player.rank === 1 && isPassed ? '🥇' : player.rank === 2 && isPassed ? '🥈' : player.rank === 3 && isPassed ? '🥉' : `#${player.rank}`}
                     </div>
 
                     {/* Contender Name */}
                     <div className="col-span-4 flex items-center space-x-2 truncate">
-                      <span className="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-500 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                      <span className={`w-6 h-6 rounded-full text-white font-bold text-xs flex items-center justify-center shrink-0 ${
+                        isPassed ? 'bg-gradient-to-tr from-amber-500 to-indigo-600' : 'bg-gradient-to-tr from-rose-600 to-gray-700'
+                      }`}>
                         {player.nickname.charAt(0).toUpperCase()}
                       </span>
                       <span className="font-bold text-white truncate">
@@ -1741,12 +1802,12 @@ export default function LeetCodePlatform() {
                     <div className="col-span-2">
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-bold border inline-block ${
-                          player.status === 'Accepted'
+                          isPassed
                             ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                             : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
                         }`}
                       >
-                        {player.status}
+                        {isPassed ? 'Accepted ✅' : `${player.status || 'Wrong Answer'} ❌`}
                       </span>
                     </div>
 
@@ -1757,7 +1818,7 @@ export default function LeetCodePlatform() {
 
                     {/* Score & Complexity */}
                     <div className="col-span-3 text-right space-y-0.5">
-                      <div className="font-bold text-emerald-400 font-mono text-xs">
+                      <div className={`font-bold font-mono text-xs ${isPassed ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {player.accuracyScore}% Accuracy
                       </div>
                       <div className="text-[10px] text-gray-300 font-mono">
@@ -1768,8 +1829,34 @@ export default function LeetCodePlatform() {
                       </div>
                     </div>
 
-                    {/* AI Feedback snippet */}
-                    {player.feedback && (
+                    {/* Failure Reason & Output Details for Wrong Submissions */}
+                    {!isPassed && (
+                      <div className="col-span-12 mt-2.5 pt-2.5 border-t border-rose-900/40 bg-rose-950/20 p-2.5 rounded-lg border border-rose-500/20 space-y-1.5">
+                        <div className="flex items-start gap-1.5 text-rose-300 font-bold text-[11px]">
+                          <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
+                          <span>Failure Reason: {player.reason || player.feedback || 'Output mismatch with problem test cases.'}</span>
+                        </div>
+                        {(player.actualOutput || player.expectedOutput) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px] pt-1">
+                            <div className="bg-[#0d1117] p-2 rounded border border-rose-500/30">
+                              <span className="text-gray-400 block text-[9px] uppercase font-bold">Program Output</span>
+                              <div className="text-rose-300 break-all whitespace-pre-wrap mt-0.5 font-semibold">
+                                {player.actualOutput || '(No output)'}
+                              </div>
+                            </div>
+                            <div className="bg-[#0d1117] p-2 rounded border border-emerald-500/30">
+                              <span className="text-gray-400 block text-[9px] uppercase font-bold">Expected Output</span>
+                              <div className="text-emerald-400 break-all whitespace-pre-wrap mt-0.5 font-semibold">
+                                {player.expectedOutput || currentProblem?.testCases?.[0]?.expected || 'Correct solution output'}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* AI Feedback snippet for Passing Submissions */}
+                    {isPassed && player.feedback && (
                       <div className="col-span-12 mt-2 pt-2 border-t border-[#30363d]/60 text-[11px] text-gray-400 italic">
                         "{player.feedback}"
                       </div>

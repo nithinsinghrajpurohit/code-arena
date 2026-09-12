@@ -442,6 +442,18 @@ app.post('/api/run', async (req, res) => {
   }
 });
 
+function normalizeOutput(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .trim()
+    .replace(/\r\n/g, '\n')
+    .replace(/\s+/g, ' ')
+    .replace(/\[\s+/g, '[')
+    .replace(/\s+\]/g, ']')
+    .replace(/,\s+/g, ',')
+    .toLowerCase();
+}
+
 /**
  * ============================================================================
  * Helper: Intelligent Algorithmic Evaluator Fallback
@@ -449,105 +461,213 @@ app.post('/api/run', async (req, res) => {
  */
 function evaluateCodeHeuristically(user_code, language = 'python', execution_output = {}, problem = null) {
   const code = (user_code || '').trim();
+  const stdout = (execution_output?.stdout || '').trim();
   const error = execution_output?.stderr || execution_output?.compile_output || '';
 
-  // 1. Template Boilerplate Check
-  if (code.includes('Hello World') || (code.length < 50)) {
+  const testCases = problem?.testCases || [];
+  const expectedSample = testCases[0]?.expected || problem?.examples?.[0]?.output || 'Expected output';
+  const actualSample = stdout || (error ? 'Error during execution' : '(No output)');
+
+  // 1. Template Boilerplate & Hello World Check (Case-insensitive)
+  const isHelloWorld = /hello\s*,?\s*world/i.test(code) || /hello\s*,?\s*world/i.test(stdout);
+  const isTooShort = code.replace(/\s+/g, '').length < 40;
+  const isUnchangedTemplate =
+    (code.includes('// Implement your solution') && !code.includes('for') && !code.includes('while') && !code.includes('map') && !code.includes('seen')) ||
+    /^\s*pass\s*$/m.test(code);
+
+  if (isHelloWorld || isTooShort || isUnchangedTemplate) {
+    const reasonText = isHelloWorld
+      ? `Submitted code is a basic "Hello World" program. Expected problem output: '${expectedSample}', but program outputted '${actualSample}'. Algorithmic logic was not implemented.`
+      : `Submitted code contains unmodified template boilerplate without solving the problem. Expected: '${expectedSample}'.`;
     return {
       is_correct: false,
       accuracy_score: 0,
-      code_quality_score: 25,
-      overall_score: 20,
+      code_quality_score: isHelloWorld ? 10 : 25,
+      overall_score: 5,
+      score: 5,
       verdict: 'Wrong Answer',
-      feedback: 'The submitted code contains basic template boilerplate ("Hello World"). Please implement the algorithmic problem logic.',
+      actual_output: actualSample,
+      expected_output: expectedSample,
+      reason: reasonText,
+      feedback: isHelloWorld
+        ? 'Wrong Answer: Code merely printed "Hello World" instead of computing the algorithmic result.'
+        : 'Wrong Answer: Template boilerplate submitted without problem logic implementation.',
       time_complexity: 'N/A',
       space_complexity: 'N/A',
-      hints: ['Implement the required solution function logic to process inputs and return the expected output.']
+      hints: ['Implement the required algorithmic solution function logic to process problem inputs and return the expected output.']
     };
   }
 
   // 2. Compile / Runtime Error Check
   if (error && error.trim() !== '' && !error.includes('warning:')) {
+    const firstLine = error.split('\n').filter((l) => l.trim().length > 0)[0] || 'Runtime Error';
     return {
       is_correct: false,
       accuracy_score: 0,
-      code_quality_score: 20,
-      overall_score: 15,
+      code_quality_score: 15,
+      overall_score: 10,
+      score: 10,
       verdict: 'Compile/Runtime Error',
-      feedback: 'The submission failed with compiler or runtime errors. Check the execution console for line numbers and syntax.',
+      actual_output: error.slice(0, 300),
+      expected_output: expectedSample,
+      reason: `Execution failed with compiler or runtime error: ${firstLine}`,
+      feedback: 'The submission failed with compiler or runtime errors. Check the execution console for syntax or typing issues.',
       time_complexity: 'N/A',
       space_complexity: 'N/A',
       hints: ['Inspect the Execution Console for stack traces, missing imports, or type errors.']
     };
   }
 
-  // 3. Problem-Specific Smart Heuristic Matching
+  // 3. Test Cases Output Verification
+  let passedCases = 0;
+  let firstFailedCase = null;
+
+  if (testCases.length > 0 && stdout) {
+    const normOut = normalizeOutput(stdout);
+    for (let i = 0; i < testCases.length; i++) {
+      const tc = testCases[i];
+      const normExp = normalizeOutput(tc.expected);
+
+      const matches =
+        normOut === normExp ||
+        (normExp.length > 0 && normOut.includes(normExp)) ||
+        (normExp === 'true' && normOut === '1') ||
+        (normExp === 'false' && normOut === '0');
+
+      if (matches) {
+        passedCases++;
+      } else if (!firstFailedCase) {
+        firstFailedCase = {
+          name: tc.name || `Case ${i + 1}`,
+          expected: tc.expected,
+          actual: stdout
+        };
+      }
+    }
+  }
+
+  // 4. Problem-Specific Smart Algorithmic Matching
   const probId = (problem?.id || '').toLowerCase();
+  let matchesAlgorithmPattern = false;
+  let patternFeedback = '';
+
   if (probId.includes('two-sum')) {
     const hasHashMap =
       code.includes('unordered_map') ||
       code.includes('HashMap') ||
       (code.includes('{}') && (code.includes('in ') || code.includes('lookup') || code.includes('seen') || code.includes('map') || code.includes('enumerate'))) ||
       code.includes('dict()');
+    const hasNestedLoops = (code.match(/for\s*\(/g) || []).length >= 2 || (code.match(/for\s+\w+\s+in/g) || []).length >= 2;
 
     if (hasHashMap) {
-      return {
-        is_correct: true,
-        accuracy_score: 100,
-        code_quality_score: 98,
-        overall_score: 98,
-        verdict: 'Accepted',
-        feedback: 'Outstanding work! Your solution utilizes an optimal one-pass Hash Table achieving O(n) linear time complexity.',
-        time_complexity: 'O(N)',
-        space_complexity: 'O(N)',
-        hints: []
-      };
+      matchesAlgorithmPattern = true;
+      patternFeedback = 'Optimal one-pass Hash Table solution achieving O(n) linear time complexity.';
+    } else if (hasNestedLoops) {
+      matchesAlgorithmPattern = true;
+      patternFeedback = 'Brute force nested iteration solution.';
     }
-  }
-
-  if (probId.includes('parentheses')) {
+  } else if (probId.includes('parentheses')) {
     if (code.includes('stack') || code.includes('push') || code.includes('pop') || code.includes('append') || code.includes('Deque')) {
-      return {
-        is_correct: true,
-        accuracy_score: 100,
-        code_quality_score: 96,
-        overall_score: 97,
-        verdict: 'Accepted',
-        feedback: 'Excellent stack-based bracket matching with linear time complexity.',
-        time_complexity: 'O(N)',
-        space_complexity: 'O(N)',
-        hints: []
-      };
+      matchesAlgorithmPattern = true;
+      patternFeedback = 'Stack-based bracket matching with linear time complexity.';
     }
-  }
-
-  if (probId.includes('stock')) {
+  } else if (probId.includes('stock')) {
     if (code.includes('min') || code.includes('max') || code.includes('profit')) {
-      return {
-        is_correct: true,
-        accuracy_score: 100,
-        code_quality_score: 95,
-        overall_score: 96,
-        verdict: 'Accepted',
-        feedback: 'Optimal single-pass greedy approach tracking minimum price and maximum profit.',
-        time_complexity: 'O(N)',
-        space_complexity: 'O(1)',
-        hints: []
-      };
+      matchesAlgorithmPattern = true;
+      patternFeedback = 'Single-pass greedy approach tracking minimum price and maximum profit.';
+    }
+  } else if (probId.includes('water') || probId.includes('container')) {
+    if (code.includes('left') && code.includes('right') && (code.includes('while') || code.includes('for'))) {
+      matchesAlgorithmPattern = true;
+      patternFeedback = 'Two-pointer inward scanning approach.';
+    }
+  } else if (probId.includes('subarray')) {
+    if (code.includes('max') && (code.includes('curr') || code.includes('sum'))) {
+      matchesAlgorithmPattern = true;
+      patternFeedback = "Kadane's algorithm dynamic programming solution.";
     }
   }
 
-  // 4. Default Heuristic Validation for General Problems
+  // If output strictly matched test cases or algorithm pattern + output verified:
+  const outputMatches = passedCases > 0;
+  if (outputMatches || (matchesAlgorithmPattern && (!stdout || normalizeOutput(stdout).includes(normalizeOutput(expectedSample))))) {
+    const accuracy = testCases.length > 0 && passedCases > 0 ? Math.round((passedCases / testCases.length) * 100) : 100;
+    const quality = matchesAlgorithmPattern ? 96 : 90;
+    const overall = Math.round(accuracy * 0.7 + quality * 0.3);
+
+    return {
+      is_correct: true,
+      accuracy_score: accuracy,
+      code_quality_score: quality,
+      overall_score: overall,
+      score: overall,
+      verdict: 'Accepted',
+      actual_output: stdout || expectedSample,
+      expected_output: expectedSample,
+      reason: 'All test cases passed. Code output matched expected results.',
+      feedback: patternFeedback || 'Outstanding work! Code output matches expected challenge results.',
+      time_complexity: 'O(N)',
+      space_complexity: 'O(N)',
+      hints: []
+    };
+  }
+
+  // 5. Default Fallback: STRICTLY WRONG ANSWER if output or algorithmic check fails!
+  const failedExpected = firstFailedCase?.expected || expectedSample;
+  const failedActual = firstFailedCase?.actual || actualSample;
+  const accScore = testCases.length > 0 && passedCases > 0 ? Math.round((passedCases / testCases.length) * 100) : 0;
+
   return {
-    is_correct: true,
-    accuracy_score: 92,
-    code_quality_score: 88,
-    overall_score: 90,
-    verdict: 'Accepted',
-    feedback: 'Code verified successfully. Algorithmic structure addresses problem requirements.',
-    time_complexity: 'O(N)',
-    space_complexity: 'O(N)',
-    hints: ['Ensure edge cases such as empty collections and boundary limits are covered.']
+    is_correct: false,
+    accuracy_score: accScore,
+    code_quality_score: 25,
+    overall_score: Math.min(20, accScore),
+    score: Math.min(20, accScore),
+    verdict: 'Wrong Answer',
+    actual_output: failedActual,
+    expected_output: failedExpected,
+    reason: `Output mismatch: Expected '${failedExpected}', but your program outputted '${failedActual}'. Solution does not satisfy test case requirements.`,
+    feedback: `Wrong Answer: Your program produced '${failedActual}' instead of '${failedExpected}'.`,
+    time_complexity: 'N/A',
+    space_complexity: 'N/A',
+    hints: ['Verify that your code properly processes input arguments and returns the exact expected structure.']
+  };
+}
+
+/**
+ * ============================================================================
+ * Helper: Execution Output Retriever with Server-Side Runner Fallback
+ * ============================================================================
+ */
+async function getExecutionOutput(source_code, language, execution_output) {
+  let stdout = (execution_output?.stdout || '').trim();
+  let stderr = (execution_output?.stderr || execution_output?.compile_output || '').trim();
+
+  // If client hasn't executed code or output is placeholder, run it on backend sandbox
+  if ((!stdout && !stderr) || stdout.includes('Sandbox execution console ready')) {
+    try {
+      const langKey = mapToLanguageKey(language);
+      const res = await executeOnJudge0(source_code, langKey).catch(async () => {
+        return await executeLocally(langKey, source_code);
+      });
+      if (res) {
+        stdout = (res.stdout || '').trim();
+        stderr = (res.stderr || res.compile_output || '').trim();
+        return {
+          stdout,
+          stderr,
+          compile_output: res.compile_output || null
+        };
+      }
+    } catch (e) {
+      console.warn('[ARENA EXECUTION] Sandbox fallback run skipped:', e.message);
+    }
+  }
+
+  return {
+    stdout,
+    stderr,
+    compile_output: execution_output?.compile_output || null
   };
 }
 
@@ -581,6 +701,9 @@ CRITICAL: Respond ONLY with a valid, raw JSON object (no markdown backticks, no 
   "code_quality_score": integer between 0 and 100 representing clean code, structure, and naming conventions,
   "overall_score": integer between 0 and 100,
   "verdict": "Accepted" | "Wrong Answer" | "Time Limit Exceeded" | "Compile/Runtime Error",
+  "actual_output": "the actual output produced by candidate code or 'hello world'",
+  "expected_output": "the expected output for problem test cases",
+  "reason": "specific reason why the solution failed or passed",
   "feedback": "Concise 1-2 sentence evaluation of algorithmic correctness and Big-O efficiency",
   "time_complexity": "e.g. O(N), O(N log N), O(N^2), etc.",
   "space_complexity": "e.g. O(1), O(N), etc.",
@@ -618,7 +741,7 @@ ${JSON.stringify(execution_output || {}, null, 2)}
       evaluation = JSON.parse(cleanedText);
       usedGemini = true;
     } catch (geminiErr) {
-      console.warn('Gemini evaluation failed, engaging heuristic evaluator:', geminiErr.message);
+      console.warn('Gemini evaluation fallback engaged:', geminiErr.message);
     }
   }
 
@@ -626,24 +749,31 @@ ${JSON.stringify(execution_output || {}, null, 2)}
     evaluation = evaluateCodeHeuristically(user_code, language, execution_output, problem);
   }
 
+  const isCorrect = Boolean(evaluation.is_correct) && evaluation.verdict === 'Accepted';
   const accuracy = typeof evaluation.accuracy_score === 'number'
     ? evaluation.accuracy_score
-    : (evaluation.is_correct ? 100 : 30);
+    : (isCorrect ? 100 : 0);
   const quality = typeof evaluation.code_quality_score === 'number'
     ? evaluation.code_quality_score
-    : (typeof evaluation.score === 'number' ? evaluation.score : 85);
+    : (isCorrect ? 85 : 25);
   const overall = typeof evaluation.overall_score === 'number'
-    ? evaluation.overall_score
-    : Math.round(accuracy * 0.7 + quality * 0.3);
+    ? (isCorrect ? evaluation.overall_score : Math.min(20, evaluation.overall_score))
+    : (isCorrect ? 90 : 10);
+
+  const defaultExpected = testCases[0]?.expected || problem?.examples?.[0]?.output || 'Expected output';
+  const defaultActual = execution_output?.stdout?.trim() || execution_output?.stderr?.trim() || '(No output)';
 
   return {
-    is_correct: Boolean(evaluation.is_correct),
-    accuracy_score: accuracy,
+    is_correct: isCorrect,
+    accuracy_score: isCorrect ? accuracy : Math.min(accuracy, 25),
     code_quality_score: quality,
     overall_score: overall,
     score: overall,
-    verdict: evaluation.verdict || (evaluation.is_correct ? 'Accepted' : 'Wrong Answer'),
-    feedback: evaluation.feedback || 'Code evaluated successfully.',
+    verdict: isCorrect ? 'Accepted' : (evaluation.verdict || 'Wrong Answer'),
+    feedback: evaluation.feedback || (isCorrect ? 'Code evaluated successfully.' : 'Solution rejected.'),
+    actual_output: evaluation.actual_output || defaultActual,
+    expected_output: evaluation.expected_output || defaultExpected,
+    reason: evaluation.reason || (isCorrect ? 'All test cases passed.' : `Wrong Answer: Output mismatch. Expected '${defaultExpected}', got '${defaultActual}'.`),
     time_complexity: evaluation.time_complexity || 'O(N)',
     space_complexity: evaluation.space_complexity || 'O(N)',
     hints: Array.isArray(evaluation.hints) ? evaluation.hints : [],
@@ -690,10 +820,10 @@ function generateRoomCode() {
 
 // Helper: Winner Determination & Leaderboard Ranking
 // Rules:
-// 1. Must be completed in-time (completionTimeSeconds <= room.durationSeconds) AND correct (is_correct === true)
+// 1. Must be completed in-time (completionTimeSeconds <= room.durationSeconds) AND strictly correct (is_correct === true && verdict === 'Accepted')
 // 2. Passing solutions ranked by fastest completion time (ascending)
 // 3. Tie-breaker: highest accuracy score (descending), then overall score (descending)
-// 4. Incorrect or unsubmitted solutions ranked after passing, sorted by accuracy score then overall score
+// 4. Incorrect solutions (Wrong Answer, Runtime Error) can NEVER beat a correct solution, regardless of submission time!
 function calculateLeaderboard(room) {
   const participants = Object.values(room.participants);
 
@@ -701,13 +831,15 @@ function calculateLeaderboard(room) {
     const aEval = a.evaluation;
     const bEval = b.evaluation;
 
-    const aPassing = Boolean(aEval?.is_correct) && ((a.completionTimeSeconds ?? 99999) <= room.durationSeconds);
-    const bPassing = Boolean(bEval?.is_correct) && ((b.completionTimeSeconds ?? 99999) <= room.durationSeconds);
+    const aPassing = Boolean(aEval?.is_correct) && aEval?.verdict === 'Accepted' && ((a.completionTimeSeconds ?? 99999) <= room.durationSeconds);
+    const bPassing = Boolean(bEval?.is_correct) && bEval?.verdict === 'Accepted' && ((b.completionTimeSeconds ?? 99999) <= room.durationSeconds);
 
+    // Rule 1: A passing solution ALWAYS beats a non-passing solution
     if (aPassing !== bPassing) {
       return aPassing ? -1 : 1;
     }
 
+    // Rule 2: Both passed - rank by speed, then accuracy, then overall score
     if (aPassing && bPassing) {
       const aTime = a.completionTimeSeconds ?? 99999;
       const bTime = b.completionTimeSeconds ?? 99999;
@@ -722,14 +854,14 @@ function calculateLeaderboard(room) {
       return (bEval?.overall_score ?? bEval?.score ?? 0) - (aEval?.overall_score ?? aEval?.score ?? 0);
     }
 
-    // Both did not pass in time
-    const aAcc = aEval?.accuracy_score ?? aEval?.score ?? 0;
-    const bAcc = bEval?.accuracy_score ?? bEval?.score ?? 0;
+    // Rule 3: Both did not pass - rank by accuracy score, then overall score, then time
+    const aAcc = aEval?.accuracy_score ?? 0;
+    const bAcc = bEval?.accuracy_score ?? 0;
     if (aAcc !== bAcc) {
       return bAcc - aAcc;
     }
-    const aScore = aEval?.overall_score ?? aEval?.score ?? 0;
-    const bScore = bEval?.overall_score ?? bEval?.score ?? 0;
+    const aScore = aEval?.overall_score ?? 0;
+    const bScore = bEval?.overall_score ?? 0;
     if (aScore !== bScore) {
       return bScore - aScore;
     }
@@ -738,22 +870,24 @@ function calculateLeaderboard(room) {
 
   return sorted.map((p, idx) => {
     const rank = idx + 1;
-    const passedInTime = Boolean(p.evaluation?.is_correct) && ((p.completionTimeSeconds ?? 99999) <= room.durationSeconds);
+    const isCorrect = Boolean(p.evaluation?.is_correct) && p.evaluation?.verdict === 'Accepted';
+    const passedInTime = isCorrect && ((p.completionTimeSeconds ?? 99999) <= room.durationSeconds);
     const isWinner = rank === 1 && passedInTime;
     const minutes = p.completionTimeSeconds ? Math.floor(p.completionTimeSeconds / 60) : 0;
     const seconds = p.completionTimeSeconds ? p.completionTimeSeconds % 60 : 0;
     const formattedTime = p.completionTimeSeconds ? `${minutes}m ${seconds}s` : 'Time Out';
 
-    const accuracy = p.evaluation?.accuracy_score ?? p.evaluation?.score ?? 0;
-    const quality = p.evaluation?.code_quality_score ?? 80;
-    const overall = p.evaluation?.overall_score ?? p.evaluation?.score ?? 0;
+    const accuracy = p.evaluation?.accuracy_score ?? (isCorrect ? 100 : 0);
+    const quality = p.evaluation?.code_quality_score ?? (isCorrect ? 85 : 20);
+    const overall = p.evaluation?.overall_score ?? (isCorrect ? 90 : 10);
 
     return {
       rank,
       id: p.id,
       nickname: p.nickname,
       isWinner,
-      status: p.evaluation?.verdict || (p.evaluation?.is_correct ? 'Accepted' : (p.status === 'Submitted' ? 'Wrong Answer' : 'Did Not Finish')),
+      isCorrect,
+      status: p.evaluation?.verdict || (isCorrect ? 'Accepted' : (p.status === 'Submitted' ? 'Wrong Answer' : 'Did Not Finish')),
       accuracyScore: accuracy,
       codeQualityScore: quality,
       overallScore: overall,
@@ -762,6 +896,9 @@ function calculateLeaderboard(room) {
       timeComplexity: p.evaluation?.time_complexity || 'N/A',
       spaceComplexity: p.evaluation?.space_complexity || 'N/A',
       feedback: p.evaluation?.feedback || 'No submission recorded.',
+      actualOutput: p.evaluation?.actual_output || null,
+      expectedOutput: p.evaluation?.expected_output || null,
+      reason: p.evaluation?.reason || p.evaluation?.feedback || null,
       language: p.language || 'Python'
     };
   });
@@ -786,7 +923,8 @@ async function handleBattleEnd(roomCode, reason = 'completed') {
       p.status = 'Submitted';
       p.completionTimeSeconds = room.durationSeconds;
       if (p.code && p.code.trim() !== '') {
-        p.evaluation = await evaluateSubmissionWithAi(p.code, p.language || 'Python', {}, room.problem);
+        const execOut = await getExecutionOutput(p.code, p.language || 'Python', {});
+        p.evaluation = await evaluateSubmissionWithAi(p.code, p.language || 'Python', execOut, room.problem);
       } else {
         p.evaluation = {
           is_correct: false,
@@ -797,7 +935,10 @@ async function handleBattleEnd(roomCode, reason = 'completed') {
           verdict: 'Did Not Finish',
           time_complexity: 'N/A',
           space_complexity: 'N/A',
-          feedback: 'No code was submitted before the battle timer expired.'
+          feedback: 'No code was submitted before the battle timer expired.',
+          reason: 'Time expired before solution was submitted.',
+          actual_output: '(No code submitted)',
+          expected_output: room.problem?.testCases?.[0]?.expected || 'Expected solution output'
         };
       }
     }
@@ -1161,8 +1302,11 @@ io.on('connection', (socket) => {
     participant.code = source_code;
     participant.language = language;
 
+    // Ensure execution_output has real stdout/stderr by running if needed
+    const effectiveExecutionOutput = await getExecutionOutput(source_code, language, execution_output);
+
     // Evaluate code using Gemini 2.5 Flash against active room.problem
-    const evalResult = await evaluateSubmissionWithAi(source_code, language, execution_output, room.problem);
+    const evalResult = await evaluateSubmissionWithAi(source_code, language, effectiveExecutionOutput, room.problem);
     participant.evaluation = evalResult;
 
     // Notify user of their evaluation
