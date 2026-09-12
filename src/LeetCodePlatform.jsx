@@ -377,16 +377,22 @@ export default function LeetCodePlatform() {
   // Synchronize starter boilerplate templates when active problem changes
   useEffect(() => {
     if (currentProblem && currentProblem.boilerplates) {
-      setCodeBuffers((prev) => {
-        const next = { ...prev };
-        ['python', 'cpp', 'java', 'c'].forEach((lang) => {
-          if (!next[lang] || next[lang] === boilerplateCode[lang] || next[lang].includes('Hello World')) {
-            next[lang] = currentProblem.boilerplates[lang] || boilerplateCode[lang];
-          }
-        });
-        return next;
+      setCodeBuffers({
+        python: currentProblem.boilerplates.python || boilerplateCode.python,
+        cpp: currentProblem.boilerplates.cpp || boilerplateCode.cpp,
+        java: currentProblem.boilerplates.java || boilerplateCode.java,
+        c: currentProblem.boilerplates.c || boilerplateCode.c
       });
       setActiveTestCaseIndex(0);
+      setExecutionData({
+        status: 'Ready',
+        time: '0.01 s',
+        timePercentile: '90.2%',
+        memory: '14.2 MB',
+        memoryPercentile: '78.5%',
+        stdout: ['// Sandbox execution console ready. Click "Run" to test your code.'],
+        errorTip: null
+      });
     }
   }, [currentProblem?.id, currentProblem?.title]);
 
@@ -502,7 +508,7 @@ export default function LeetCodePlatform() {
   const handleLanguageChange = (newLang) => {
     setSelectedLanguage(newLang);
     setCodeBuffers((prev) => {
-      if (!prev[newLang] || prev[newLang].includes('Hello World') || prev[newLang] === boilerplateCode[newLang]) {
+      if (!prev[newLang]) {
         return {
           ...prev,
           [newLang]: currentProblem?.boilerplates?.[newLang] || boilerplateCode[newLang] || ''
@@ -1585,7 +1591,14 @@ export default function LeetCodePlatform() {
                     <div className="relative">
                       <select
                         value={selectedProblemId}
-                        onChange={(e) => setSelectedProblemId(e.target.value)}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          setSelectedProblemId(id);
+                          if (!inRoom) {
+                            const p = LEETCODE_PROBLEM_BANK.find((item) => item.id === id);
+                            if (p) setCurrentProblem(p);
+                          }
+                        }}
                         className="w-full bg-[#0d1117] text-white text-xs px-3 py-2 rounded-lg border border-[#30363d] focus:outline-none focus:ring-1 focus:ring-amber-500 appearance-none cursor-pointer"
                       >
                         {LEETCODE_PROBLEM_BANK.map((p) => (
