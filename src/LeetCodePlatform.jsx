@@ -41,7 +41,7 @@ import {
   ChevronRight,
   ListFilter
 } from 'lucide-react';
-import { LEETCODE_PROBLEM_BANK } from './leetcode_bank.js';
+import { LEETCODE_PROBLEM_BANK, normalizeReviewLang, getOfficialSolution } from './leetcode_bank.js';
 
 // Default initial problem: 1. Two Sum
 const DEFAULT_PROBLEM = LEETCODE_PROBLEM_BANK[0];
@@ -71,6 +71,13 @@ const getMonacoLang = (lang) => {
   if (l.includes('js') || l.includes('javascript')) return 'javascript';
   return 'python';
 };
+
+const REVIEW_LANGUAGES = [
+  { id: 'c', label: 'C' },
+  { id: 'cpp', label: 'C++' },
+  { id: 'java', label: 'Java' },
+  { id: 'python', label: 'Python' }
+];
 
 const TEST_CASES = [
   {
@@ -156,7 +163,7 @@ export default function LeetCodePlatform() {
   const [selectedReviewTab, setSelectedReviewTab] = useState('official');
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [copiedReviewCode, setCopiedReviewCode] = useState(false);
-  const [selectedOfficialLangIndex, setSelectedOfficialLangIndex] = useState(0);
+  const [officialLangOverride, setOfficialLangOverride] = useState(null);
 
   // Solo Practice Sequential Line-by-Line Question Track & Completion
   const [completedQuestions, setCompletedQuestions] = useState(() => {
@@ -2113,6 +2120,7 @@ export default function LeetCodePlatform() {
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedReviewTab(player.id);
+                          setOfficialLangOverride(normalizeReviewLang(player.language));
                           setShowLeaderboardModal(false);
                           setShowCodeReviewModal(true);
                         }}
@@ -2223,24 +2231,14 @@ export default function LeetCodePlatform() {
       {/* 5. POST-BATTLE CODE REVIEW & OFFICIAL SOLUTION MODAL               */}
       {/* ------------------------------------------------------------------ */}
       {showCodeReviewModal && leaderboardData && (() => {
-        const officialSolutions =
-          currentProblem?.botSolutions && currentProblem.botSolutions.length > 0
-            ? currentProblem.botSolutions
-            : [
-                {
-                  code: currentProblem?.boilerplates?.[selectedLanguage] || currentProblem?.boilerplates?.python || '// Optimal reference implementation',
-                  language: selectedLanguage,
-                  score: 100,
-                  accuracy_score: 100,
-                  feedback: 'Optimal algorithmic reference solution.'
-                }
-              ];
-        const activeOfficialSolution = officialSolutions[selectedOfficialLangIndex] || officialSolutions[0];
-
         const activeContender =
           leaderboardData.find((p) => p.id === selectedReviewTab) ||
           leaderboardData.find((p) => p.id === socket?.id) ||
           leaderboardData[0];
+
+        const contenderLang = normalizeReviewLang(activeContender?.language || selectedLanguage || 'python');
+        const effectiveOfficialLang = officialLangOverride || contenderLang;
+        const activeOfficialSolution = getOfficialSolution(currentProblem, effectiveOfficialLang);
 
         const isViewingOfficialOnly = selectedReviewTab === 'official' && !isCompareMode;
 
@@ -2359,7 +2357,10 @@ export default function LeetCodePlatform() {
                     <button
                       key={player.id}
                       type="button"
-                      onClick={() => setSelectedReviewTab(player.id)}
+                      onClick={() => {
+                        setSelectedReviewTab(player.id);
+                        setOfficialLangOverride(normalizeReviewLang(player.language));
+                      }}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer shrink-0 ${
                         isSelected
                           ? isPassed
@@ -2509,41 +2510,66 @@ export default function LeetCodePlatform() {
                     {/* Right Column: Official Correct Solution */}
                     <div className="flex flex-col h-full min-h-0 bg-[#161b22] border border-emerald-500/30 rounded-xl overflow-hidden shadow">
                       {/* Sub-Header */}
-                      <div className="px-3.5 py-2.5 bg-[#161b22] border-b border-[#30363d] flex items-center justify-between gap-2 shrink-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span className="font-bold text-emerald-300 text-xs truncate">
-                            Official Verified Solution
-                          </span>
-                          <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
-                            100% Score
-                          </span>
+                      <div className="px-3.5 py-2 bg-[#161b22] border-b border-[#30363d] flex flex-wrap items-center justify-between gap-2 shrink-0">
+                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span className="font-bold text-emerald-300 text-xs truncate">
+                              Official Verified Solution
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
+                              100% Score
+                            </span>
+                          </div>
 
-                          {/* Language selector for official solution */}
-                          {officialSolutions.length > 1 && (
-                            <div className="flex items-center gap-1 ml-1">
-                              {officialSolutions.map((sol, idx) => (
+                          {/* Language selector tabs for official solution */}
+                          <div className="flex items-center gap-1 bg-[#0d1117] p-0.5 rounded-lg border border-[#30363d] shrink-0">
+                            {REVIEW_LANGUAGES.map((langObj) => {
+                              const isActive = effectiveOfficialLang === langObj.id;
+                              const isMatched = contenderLang === langObj.id;
+                              return (
                                 <button
-                                  key={idx}
+                                  key={langObj.id}
                                   type="button"
-                                  onClick={() => setSelectedOfficialLangIndex(idx)}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium transition cursor-pointer ${
-                                    selectedOfficialLangIndex === idx
-                                      ? 'bg-emerald-600 text-white'
-                                      : 'bg-[#21262d] text-gray-400 hover:text-white'
+                                  onClick={() => setOfficialLangOverride(langObj.id)}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition cursor-pointer flex items-center gap-1 ${
+                                    isActive
+                                      ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-700/50 border border-emerald-400'
+                                      : 'text-gray-400 hover:text-gray-200 hover:bg-[#161b22]'
                                   }`}
+                                  title={`View ${langObj.label} official solution`}
                                 >
-                                  {sol.language?.toUpperCase() || `Option ${idx + 1}`}
+                                  <span>{langObj.label}</span>
+                                  {isMatched && (
+                                    <span className={`text-[8px] px-1 py-0 rounded font-sans uppercase font-bold tracking-tight ${
+                                      isActive ? 'bg-black/30 text-emerald-200' : 'bg-indigo-500/20 text-indigo-300'
+                                    }`}>
+                                      Matched
+                                    </span>
+                                  )}
                                 </button>
-                              ))}
-                            </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Quick Reset Button if overridden */}
+                          {effectiveOfficialLang !== contenderLang && (
+                            <button
+                              type="button"
+                              onClick={() => setOfficialLangOverride(contenderLang)}
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/30 transition cursor-pointer flex items-center gap-1 shrink-0"
+                              title={`Reset to match ${activeContender?.nickname || 'contender'}'s ${contenderLang.toUpperCase()} code`}
+                            >
+                              <RotateCcw className="w-2.5 h-2.5" />
+                              <span>Match {contenderLang.toUpperCase()}</span>
+                            </button>
                           )}
                         </div>
 
                         <button
                           type="button"
                           onClick={() => handleCopyReviewCode(activeOfficialSolution?.code)}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium bg-[#21262d] hover:bg-[#30363d] text-gray-300 transition cursor-pointer shrink-0"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium bg-[#21262d] hover:bg-[#30363d] text-gray-300 transition cursor-pointer shrink-0 ml-auto"
                           title="Copy official solution code"
                         >
                           {copiedReviewCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -2607,26 +2633,24 @@ export default function LeetCodePlatform() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {/* Language Selector */}
-                        {officialSolutions.length > 1 && (
-                          <div className="flex items-center gap-1 bg-[#0d1117] p-1 rounded-lg border border-[#30363d]">
-                            {officialSolutions.map((sol, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => setSelectedOfficialLangIndex(idx)}
-                                className={`px-2.5 py-1 rounded text-xs font-mono font-semibold transition cursor-pointer ${
-                                  selectedOfficialLangIndex === idx
-                                    ? 'bg-emerald-600 text-white'
-                                    : 'text-gray-400 hover:text-white'
-                                }`}
-                              >
-                                {sol.language?.toUpperCase() || `Option ${idx + 1}`}
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-1 bg-[#0d1117] p-1 rounded-lg border border-[#30363d]">
+                          {REVIEW_LANGUAGES.map((langObj) => (
+                            <button
+                              key={langObj.id}
+                              type="button"
+                              onClick={() => setOfficialLangOverride(langObj.id)}
+                              className={`px-2.5 py-1 rounded text-xs font-mono font-semibold transition cursor-pointer ${
+                                effectiveOfficialLang === langObj.id
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'text-gray-400 hover:text-white'
+                              }`}
+                            >
+                              {langObj.label}
+                            </button>
+                          ))}
+                        </div>
 
                         <button
                           type="button"
