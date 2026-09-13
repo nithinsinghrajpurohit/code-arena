@@ -1844,413 +1844,438 @@ export default function CodeArenaPlatform() {
 
       {/* ------------------------------------------------------------------ */}
       {/* 3. LOBBY ENTRY MODAL (When not currently in a room)                 */}
-      {/* ------------------------------------------------------------------ */}
-      {showLobbyModal && !inRoom && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[#161b22] border border-[#30363d] rounded-2xl shadow-2xl p-6 relative overflow-hidden">
-            {/* Header Accent */}
+          {showLobbyModal && !inRoom && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-lg bg-[#161b22] border border-[#30363d] rounded-2xl shadow-2xl relative flex flex-col max-h-[92vh] my-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header Accent Bar */}
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-500 via-emerald-500 to-indigo-500" />
 
-            {/* Close Button (for Solo Sandbox Mode) */}
-            <button
-              type="button"
-              onClick={() => setShowLobbyModal(false)}
-              className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-[#21262d] transition text-sm font-bold cursor-pointer z-10"
-              title="Close and enter Solo Practice"
-            >
-              ✕
-            </button>
+            {/* MODAL HEADER (Fixed / Non-scrolling) */}
+            <div className="p-5 pb-3 border-b border-[#30363d]/60 relative bg-[#161b22] shrink-0">
+              {/* Solo Practice Quick Action / Close Button */}
+              <button
+                type="button"
+                onClick={() => setShowLobbyModal(false)}
+                className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 text-xs text-gray-300 hover:text-white bg-[#0d1117] hover:bg-[#21262d] border border-[#30363d] rounded-lg transition font-medium cursor-pointer z-10"
+                title="Exit to Practice Solo Sandbox"
+              >
+                <span>Solo Sandbox</span>
+                <span className="text-gray-400 font-bold">✕</span>
+              </button>
 
-            {/* Modal Title */}
-            <div className="text-center mb-6">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 mb-3 shadow-lg shadow-amber-500/10">
-                <Swords className="w-6 h-6 animate-pulse" />
+              {/* Title & Brand */}
+              <div className="flex items-center space-x-3 mb-3 pr-28">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-emerald-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/10">
+                  <Swords className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-white tracking-wider flex items-center gap-2">
+                    <span>CODE ARENA</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/30">
+                      LIVE BATTLES
+                    </span>
+                  </h2>
+                  <p className="text-[11px] text-gray-400">Competitive Algorithmic Battles • Up to 6 Contenders</p>
+                </div>
               </div>
-              <h2 className="text-xl font-extrabold text-white tracking-wider">CODE ARENA</h2>
-              <p className="text-xs text-gray-400 mt-1">Multiplayer Competitive Algorithmic Battles</p>
-            </div>
 
-            {/* Error Notification */}
-            {roomError && (
-              <div className="mb-4 p-3 rounded-lg bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-                <span>{roomError}</span>
+              {/* Nickname Input */}
+              <div className="space-y-1 mb-3">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="font-semibold text-gray-300">Your Contender Nickname</label>
+                  <button
+                    type="button"
+                    onClick={handleRandomizeNickname}
+                    className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer font-medium"
+                  >
+                    <Dices className="w-3 h-3" /> Randomize
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  maxLength={20}
+                  placeholder="Enter your nickname..."
+                  className="w-full bg-[#0d1117] text-white text-xs px-3 py-2 rounded-lg border border-[#30363d] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
               </div>
-            )}
 
-            {/* Nickname Input */}
-            <div className="space-y-1.5 mb-5">
-              <label className="text-xs font-semibold text-gray-300 flex items-center justify-between">
-                <span>Your Contender Nickname</span>
+              {/* Tabs: Create vs Join */}
+              <div className="flex p-1 rounded-lg bg-[#0d1117] border border-[#30363d]">
                 <button
                   type="button"
-                  onClick={handleRandomizeNickname}
-                  className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer"
+                  onClick={() => setActiveLobbyTab('create')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                    activeLobbyTab === 'create'
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
                 >
-                  <Dices className="w-3 h-3" /> Randomize
+                  <Swords className="w-3.5 h-3.5" />
+                  <span>Create Arena Room</span>
                 </button>
-              </label>
-              <input
-                type="text"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                maxLength={20}
-                placeholder="Enter your nickname..."
-                className="w-full bg-[#0d1117] text-white text-sm px-3.5 py-2.5 rounded-lg border border-[#30363d] focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-
-            {/* Tabs: Create vs Join */}
-            <div className="flex p-1 rounded-lg bg-[#0d1117] border border-[#30363d] mb-4">
-              <button
-                type="button"
-                onClick={() => setActiveLobbyTab('create')}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${
-                  activeLobbyTab === 'create'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Create Arena Room
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveLobbyTab('join')}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${
-                  activeLobbyTab === 'join'
-                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Join Arena Room
-              </button>
-            </div>
-
-            {/* Arena Battle Rules Callout Banner */}
-            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300 mb-4">
-              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <div>
-                <strong className="text-amber-200">Arena Battle Rule:</strong> Once your code is submitted, it <span className="underline decoration-amber-400 font-bold">cannot be edited again</span>. Always test your solution thoroughly using the "Run" button before submitting!
+                <button
+                  type="button"
+                  onClick={() => setActiveLobbyTab('join')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                    activeLobbyTab === 'join'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Join Arena Room</span>
+                </button>
               </div>
             </div>
 
-            {/* Tab 1: Create Arena Room */}
-            {activeLobbyTab === 'create' && (
-              <div className="space-y-4">
-                {/* Battle Duration (Adjustable up to Max 1 Hour) */}
-                <div className="space-y-2.5 bg-[#0d1117] p-3 rounded-xl border border-[#30363d]">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Battle Duration</span>
-                    </label>
-                    <span className="text-xs font-mono font-bold text-emerald-300 bg-emerald-950/70 border border-emerald-500/40 px-2 py-0.5 rounded">
-                      {Math.round(selectedDuration / 60)} Minutes {selectedDuration === 3600 ? '(1 Hour Max)' : ''}
-                    </span>
-                  </div>
-
-                  {/* Preset Pills (5m, 15m, 30m, 45m, 60m / 1h) */}
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {[
-                      { sec: 300, label: '5m', sub: 'Sprint' },
-                      { sec: 900, label: '15m', sub: 'Standard' },
-                      { sec: 1800, label: '30m', sub: 'Epic' },
-                      { sec: 2700, label: '45m', sub: 'Master' },
-                      { sec: 3600, label: '60m', sub: '1 Hour' }
-                    ].map((preset) => {
-                      const isSelected = selectedDuration === preset.sec;
-                      return (
-                        <button
-                          key={preset.sec}
-                          type="button"
-                          onClick={() => setSelectedDuration(preset.sec)}
-                          className={`py-1.5 px-1 rounded-lg border text-center transition cursor-pointer flex flex-col items-center justify-center ${
-                            isSelected
-                              ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 font-bold ring-1 ring-emerald-500/50 shadow-md shadow-emerald-500/20'
-                              : 'bg-[#161b22] border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-white'
-                          }`}
-                        >
-                          <span className="text-xs font-bold font-mono">{preset.label}</span>
-                          <span className="text-[8px] text-gray-500 font-semibold">{preset.sub}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Interactive Slider up to 1 Hour (60 minutes) */}
-                  <div className="space-y-1 pt-1">
-                    <div className="flex items-center justify-between text-[10px] text-gray-400">
-                      <span>Adjust Duration (5 - 60 mins):</span>
-                      <span className="text-gray-400 font-mono">Max: 1 Hour (60m)</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={300}
-                      max={3600}
-                      step={300}
-                      value={selectedDuration}
-                      onChange={(e) => setSelectedDuration(Number(e.target.value))}
-                      className="w-full h-1.5 bg-[#21262d] rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                    />
-                    <div className="flex justify-between text-[9px] text-gray-500 font-mono px-0.5">
-                      <span>5m</span>
-                      <span>15m</span>
-                      <span>30m</span>
-                      <span>45m</span>
-                      <span className="text-emerald-400 font-bold">60m (1h)</span>
-                    </div>
-                  </div>
+            {/* SCROLLABLE MODAL BODY */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 pr-3.5">
+              {/* Error Notification */}
+              {roomError && (
+                <div className="p-2.5 rounded-lg bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                  <span>{roomError}</span>
                 </div>
+              )}
 
-                {/* Number of Members (Capacity) Selector: 2 to 6 */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <label className="font-semibold text-gray-400">Number of Members</label>
-                    <span className="text-[11px] font-bold text-amber-400 font-mono">
-                      {selectedMaxParticipants === 2
-                        ? '1v1 Duel (2 Players)'
-                        : selectedMaxParticipants === 3
-                        ? '3-Way Match (3 Players)'
-                        : selectedMaxParticipants === 4
-                        ? 'Squad (4 Players)'
-                        : selectedMaxParticipants === 5
-                        ? '5-Player Arena'
-                        : 'Full Arena (6 Players)'}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {[2, 3, 4, 5, 6].map((num) => {
-                      const isSelected = selectedMaxParticipants === num;
-                      return (
-                        <button
-                          key={num}
-                          type="button"
-                          onClick={() => setSelectedMaxParticipants(num)}
-                          className={`py-2 px-1 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center ${
-                            isSelected
-                              ? 'bg-emerald-950/70 border-emerald-500 text-emerald-300 font-bold ring-2 ring-emerald-500/40 shadow-lg shadow-emerald-500/10'
-                              : 'bg-[#0d1117] border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-white'
-                          }`}
-                        >
-                          <span className="text-base font-extrabold font-mono leading-none">{num}</span>
-                          <span className="text-[9px] mt-1 text-gray-500 font-semibold uppercase tracking-wider">
-                            {num === 2 ? '1v1' : num === 3 ? '3-Way' : num === 6 ? 'Max' : `${num}P`}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Code Arena Challenge & AI Problem Selection */}
-                <div className="space-y-2 pt-2 border-t border-[#30363d]/70">
-                  <div className="flex items-center justify-between text-xs">
-                    <label className="font-semibold text-gray-300 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Code Arena Challenge & AI Search</span>
-                    </label>
-                    <span className="text-[10px] text-amber-400 font-mono">Gemini 2.5 Active</span>
-                  </div>
-
-                  {/* Problem Mode Tabs */}
-                  <div className="grid grid-cols-3 gap-1 p-1 bg-[#0d1117] rounded-lg border border-[#30363d] text-[10px] font-medium">
-                    <button
-                      type="button"
-                      onClick={() => setProblemSelectionMode('bank')}
-                      className={`py-1.5 px-1 rounded transition text-center ${
-                        problemSelectionMode === 'bank'
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
-                          : 'text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      Classics Bank
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setProblemSelectionMode('difficulty')}
-                      className={`py-1.5 px-1 rounded transition text-center ${
-                        problemSelectionMode === 'difficulty'
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold'
-                          : 'text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      By Difficulty
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setProblemSelectionMode('ai_topic')}
-                      className={`py-1.5 px-1 rounded transition text-center ${
-                        problemSelectionMode === 'ai_topic'
-                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold'
-                          : 'text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      AI Topic Search
-                    </button>
-                  </div>
-
-                  {/* Mode 1: Curated Bank Dropdown */}
-                  {problemSelectionMode === 'bank' && (
-                    <div className="relative">
-                      <select
-                        value={selectedProblemId}
-                        onChange={(e) => {
-                          const id = e.target.value;
-                          setSelectedProblemId(id);
-                          if (!inRoom) {
-                            const p = CODE_ARENA_PROBLEM_BANK.find((item) => item.id === id);
-                            if (p) setCurrentProblem(p);
-                          }
-                        }}
-                        className="w-full bg-[#0d1117] text-white text-xs px-3 py-2 rounded-lg border border-[#30363d] focus:outline-none focus:ring-1 focus:ring-amber-500 appearance-none cursor-pointer"
-                      >
-                        <optgroup label="🐍 Python Basics (10 Questions)">
-                          {CODE_ARENA_PROBLEM_BANK.filter((p) => p.category === 'Python Basics' || p.tags?.includes('Python Basics')).map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.title} ({p.difficulty})
-                            </option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="⚡ Code Arena Algorithmic Bank (7 Questions)">
-                          {CODE_ARENA_PROBLEM_BANK.filter((p) => p.category !== 'Python Basics' && !p.tags?.includes('Python Basics')).map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.title} ({p.difficulty})
-                            </option>
-                          ))}
-                        </optgroup>
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              {/* Tab 1: Create Arena Room Options */}
+              {activeLobbyTab === 'create' && (
+                <>
+                  {/* Arena Battle Rules Callout Banner */}
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="leading-relaxed">
+                      <strong className="text-amber-200">Arena Battle Rule:</strong> Once your code is submitted, it <span className="underline decoration-amber-400 font-bold">cannot be edited again</span>. Always test your solution thoroughly using the "Run" button before submitting!
                     </div>
-                  )}
+                  </div>
 
-                  {/* Mode 2: Difficulty Selector */}
-                  {problemSelectionMode === 'difficulty' && (
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {['Easy', 'Medium', 'Hard', 'Random'].map((diff) => (
-                        <button
-                          key={diff}
-                          type="button"
-                          onClick={() => setSelectedDifficulty(diff)}
-                          className={`py-1.5 text-xs rounded-lg border transition font-medium ${
-                            selectedDifficulty === diff
-                              ? diff === 'Easy'
-                                ? 'bg-emerald-950/70 border-emerald-500 text-emerald-300 font-bold'
-                                : diff === 'Medium'
-                                ? 'bg-amber-950/70 border-amber-500 text-amber-300 font-bold'
-                                : diff === 'Hard'
-                                ? 'bg-rose-950/70 border-rose-500 text-rose-300 font-bold'
-                                : 'bg-indigo-950/70 border-indigo-500 text-indigo-300 font-bold'
-                              : 'bg-[#0d1117] border-[#30363d] text-gray-400 hover:text-white'
-                          }`}
-                        >
-                          {diff}
-                        </button>
-                      ))}
+                  {/* Battle Duration (Adjustable up to Max 1 Hour) */}
+                  <div className="space-y-2.5 bg-[#0d1117] p-3 rounded-xl border border-[#30363d]">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Battle Duration</span>
+                      </label>
+                      <span className="text-xs font-mono font-bold text-emerald-300 bg-emerald-950/70 border border-emerald-500/40 px-2 py-0.5 rounded">
+                        {Math.round(selectedDuration / 60)} Minutes {selectedDuration === 3600 ? '(1 Hour Max)' : ''}
+                      </span>
                     </div>
-                  )}
 
-                  {/* Mode 3: AI Topic Search */}
-                  {problemSelectionMode === 'ai_topic' && (
-                    <div className="space-y-1.5">
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={customTopicQuery}
-                          onChange={(e) => setCustomTopicQuery(e.target.value)}
-                          placeholder="e.g. Dynamic Programming, Binary Search, Trees..."
-                          className="w-full bg-[#0d1117] text-white text-xs pl-8 pr-3 py-2 rounded-lg border border-[#30363d] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        />
-                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {['Two Pointers', 'Binary Search', 'Sliding Window', 'Stack & Queue', 'Dynamic Programming'].map((suggestion) => (
+                    {/* Preset Pills (5m, 15m, 30m, 45m, 60m / 1h) */}
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {[
+                        { sec: 300, label: '5m', sub: 'Sprint' },
+                        { sec: 900, label: '15m', sub: 'Standard' },
+                        { sec: 1800, label: '30m', sub: 'Epic' },
+                        { sec: 2700, label: '45m', sub: 'Master' },
+                        { sec: 3600, label: '60m', sub: '1 Hour' }
+                      ].map((preset) => {
+                        const isSelected = selectedDuration === preset.sec;
+                        return (
                           <button
-                            key={suggestion}
+                            key={preset.sec}
                             type="button"
-                            onClick={() => setCustomTopicQuery(suggestion)}
-                            className="text-[9px] px-1.5 py-0.5 rounded bg-[#21262d] text-gray-400 hover:text-amber-300 hover:bg-[#30363d] border border-[#30363d] transition cursor-pointer"
+                            onClick={() => setSelectedDuration(preset.sec)}
+                            className={`py-1.5 px-1 rounded-lg border text-center transition cursor-pointer flex flex-col items-center justify-center ${
+                              isSelected
+                                ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 font-bold ring-1 ring-emerald-500/50 shadow-md shadow-emerald-500/20'
+                                : 'bg-[#161b22] border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-white'
+                            }`}
                           >
-                            + {suggestion}
+                            <span className="text-xs font-bold font-mono">{preset.label}</span>
+                            <span className="text-[8px] text-gray-500 font-semibold">{preset.sub}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Interactive Slider up to 1 Hour (60 minutes) */}
+                    <div className="space-y-1 pt-1">
+                      <div className="flex items-center justify-between text-[10px] text-gray-400">
+                        <span>Adjust Duration (5 - 60 mins):</span>
+                        <span className="text-gray-400 font-mono">Max: 1 Hour (60m)</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={300}
+                        max={3600}
+                        step={300}
+                        value={selectedDuration}
+                        onChange={(e) => setSelectedDuration(Number(e.target.value))}
+                        className="w-full h-1.5 bg-[#21262d] rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                      />
+                      <div className="flex justify-between text-[9px] text-gray-500 font-mono px-0.5">
+                        <span>5m</span>
+                        <span>15m</span>
+                        <span>30m</span>
+                        <span>45m</span>
+                        <span className="text-emerald-400 font-bold">60m (1h)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Number of Members (Capacity) Selector: 2 to 6 */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <label className="font-semibold text-gray-400">Number of Members</label>
+                      <span className="text-[11px] font-bold text-amber-400 font-mono">
+                        {selectedMaxParticipants === 2
+                          ? '1v1 Duel (2 Players)'
+                          : selectedMaxParticipants === 3
+                          ? '3-Way Match (3 Players)'
+                          : selectedMaxParticipants === 4
+                          ? 'Squad (4 Players)'
+                          : selectedMaxParticipants === 5
+                          ? '5-Player Arena'
+                          : 'Full Arena (6 Players)'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {[2, 3, 4, 5, 6].map((num) => {
+                        const isSelected = selectedMaxParticipants === num;
+                        return (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setSelectedMaxParticipants(num)}
+                            className={`py-2 px-1 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center ${
+                              isSelected
+                                ? 'bg-emerald-950/70 border-emerald-500 text-emerald-300 font-bold ring-2 ring-emerald-500/40 shadow-lg shadow-emerald-500/10'
+                                : 'bg-[#0d1117] border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-white'
+                            }`}
+                          >
+                            <span className="text-base font-extrabold font-mono leading-none">{num}</span>
+                            <span className="text-[9px] mt-1 text-gray-500 font-semibold uppercase tracking-wider">
+                              {num === 2 ? '1v1' : num === 3 ? '3-Way' : num === 6 ? 'Max' : `${num}P`}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Code Arena Challenge & AI Problem Selection */}
+                  <div className="space-y-2 pt-2 border-t border-[#30363d]/70">
+                    <div className="flex items-center justify-between text-xs">
+                      <label className="font-semibold text-gray-300 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Code Arena Challenge & AI Search</span>
+                      </label>
+                      <span className="text-[10px] text-amber-400 font-mono">Gemini 2.5 Active</span>
+                    </div>
+
+                    {/* Problem Mode Tabs */}
+                    <div className="grid grid-cols-3 gap-1 p-1 bg-[#0d1117] rounded-lg border border-[#30363d] text-[10px] font-medium">
+                      <button
+                        type="button"
+                        onClick={() => setProblemSelectionMode('bank')}
+                        className={`py-1.5 px-1 rounded transition text-center ${
+                          problemSelectionMode === 'bank'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
+                            : 'text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        Classics Bank
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProblemSelectionMode('difficulty')}
+                        className={`py-1.5 px-1 rounded transition text-center ${
+                          problemSelectionMode === 'difficulty'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold'
+                            : 'text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        By Difficulty
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProblemSelectionMode('ai_topic')}
+                        className={`py-1.5 px-1 rounded transition text-center ${
+                          problemSelectionMode === 'ai_topic'
+                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold'
+                            : 'text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        AI Topic Search
+                      </button>
+                    </div>
+
+                    {/* Mode 1: Curated Bank Dropdown */}
+                    {problemSelectionMode === 'bank' && (
+                      <div className="relative">
+                        <select
+                          value={selectedProblemId}
+                          onChange={(e) => {
+                            const id = e.target.value;
+                            setSelectedProblemId(id);
+                            if (!inRoom) {
+                              const p = CODE_ARENA_PROBLEM_BANK.find((item) => item.id === id);
+                              if (p) setCurrentProblem(p);
+                            }
+                          }}
+                          className="w-full bg-[#0d1117] text-white text-xs px-3 py-2 rounded-lg border border-[#30363d] focus:outline-none focus:ring-1 focus:ring-amber-500 appearance-none cursor-pointer"
+                        >
+                          <optgroup label="🐍 Python Basics (10 Questions)">
+                            {CODE_ARENA_PROBLEM_BANK.filter((p) => p.category === 'Python Basics' || p.tags?.includes('Python Basics')).map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.title} ({p.difficulty})
+                              </option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="⚡ Code Arena Algorithmic Bank (7 Questions)">
+                            {CODE_ARENA_PROBLEM_BANK.filter((p) => p.category !== 'Python Basics' && !p.tags?.includes('Python Basics')).map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.title} ({p.difficulty})
+                              </option>
+                            ))}
+                          </optgroup>
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    )}
+
+                    {/* Mode 2: Difficulty Selector */}
+                    {problemSelectionMode === 'difficulty' && (
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {['Easy', 'Medium', 'Hard', 'Random'].map((diff) => (
+                          <button
+                            key={diff}
+                            type="button"
+                            onClick={() => setSelectedDifficulty(diff)}
+                            className={`py-1.5 text-xs rounded-lg border transition font-medium ${
+                              selectedDifficulty === diff
+                                ? diff === 'Easy'
+                                  ? 'bg-emerald-950/70 border-emerald-500 text-emerald-300 font-bold'
+                                  : diff === 'Medium'
+                                  ? 'bg-amber-950/70 border-amber-500 text-amber-300 font-bold'
+                                  : diff === 'Hard'
+                                  ? 'bg-rose-950/70 border-rose-500 text-rose-300 font-bold'
+                                  : 'bg-indigo-950/70 border-indigo-500 text-indigo-300 font-bold'
+                                : 'bg-[#0d1117] border-[#30363d] text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            {diff}
                           </button>
                         ))}
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
 
-                <div className="p-3 rounded-lg bg-[#0d1117] border border-[#30363d] text-[11px] text-gray-300 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 font-bold text-amber-400">
-                      <Users className="w-3.5 h-3.5" />
-                      <span>Room Capacity: {selectedMaxParticipants} Contenders</span>
-                    </div>
-                    <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-500/30">
-                      {selectedMaxParticipants === 2 ? '1v1 Duel' : `${selectedMaxParticipants} Players Max`}
-                    </span>
+                    {/* Mode 3: AI Topic Search */}
+                    {problemSelectionMode === 'ai_topic' && (
+                      <div className="space-y-1.5">
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={customTopicQuery}
+                            onChange={(e) => setCustomTopicQuery(e.target.value)}
+                            placeholder="e.g. Dynamic Programming, Binary Search, Trees..."
+                            className="w-full bg-[#0d1117] text-white text-xs pl-8 pr-3 py-2 rounded-lg border border-[#30363d] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {['Two Pointers', 'Binary Search', 'Sliding Window', 'Stack & Queue', 'Dynamic Programming'].map((suggestion) => (
+                            <button
+                              key={suggestion}
+                              type="button"
+                              onClick={() => setCustomTopicQuery(suggestion)}
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-[#21262d] text-gray-400 hover:text-amber-300 hover:bg-[#30363d] border border-[#30363d] transition cursor-pointer"
+                            >
+                              + {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <p className="text-gray-400 leading-relaxed text-[11px]">
-                    Synchronized Code Arena challenge for all {selectedMaxParticipants} members. Fastest passing solution intime wins!
-                  </p>
-                </div>
 
+                  {/* Capacity Info Card */}
+                  <div className="p-3 rounded-lg bg-[#0d1117] border border-[#30363d] text-[11px] text-gray-300 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold text-amber-400">
+                        <Users className="w-3.5 h-3.5" />
+                        <span>Room Capacity: {selectedMaxParticipants} Contenders</span>
+                      </div>
+                      <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-500/30">
+                        {selectedMaxParticipants === 2 ? '1v1 Duel' : `${selectedMaxParticipants} Players Max`}
+                      </span>
+                    </div>
+                    <p className="text-gray-400 leading-relaxed text-[11px]">
+                      Synchronized Code Arena challenge for all {selectedMaxParticipants} members. Fastest passing solution intime wins!
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* Tab 2: Join Arena Room Content */}
+              {activeLobbyTab === 'join' && (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-400">6-Character Room Code</label>
+                    <input
+                      type="text"
+                      value={joinRoomCodeInput}
+                      onChange={(e) => setJoinRoomCodeInput(e.target.value.toUpperCase())}
+                      placeholder="e.g. BATTLE-7X9"
+                      maxLength={12}
+                      className="w-full bg-[#0d1117] text-white text-sm font-mono uppercase px-3.5 py-2.5 rounded-lg border border-[#30363d] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-xs text-gray-400 space-y-1.5">
+                    <div className="font-semibold text-indigo-300 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Join Live Arena Match</span>
+                    </div>
+                    <p className="leading-relaxed text-[11px]">
+                      Enter the battle code shared by your friend or match organizer. Join as player 2, 3, 4, 5, or 6 (maximum 6 per room).
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* FIXED ACTION FOOTER (Always 100% visible, never cut off) */}
+            <div className="p-4 pt-3 bg-[#13171f] border-t border-[#30363d] shrink-0 space-y-2">
+              {/* Primary Action Button */}
+              {activeLobbyTab === 'create' ? (
                 <button
                   type="button"
                   onClick={handleCreateRoom}
-                  className="w-full py-2.5 rounded-lg font-bold text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/30 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                  className="w-full py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/30 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
                 >
                   <Swords className="w-4 h-4" />
-                  <span>Create Arena & Enter</span>
+                  <span>Create Arena & Enter Battle</span>
                 </button>
-              </div>
-            )}
-
-            {/* Tab 2: Join Arena Room */}
-            {activeLobbyTab === 'join' && (
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-400">6-Character Room Code</label>
-                  <input
-                    type="text"
-                    value={joinRoomCodeInput}
-                    onChange={(e) => setJoinRoomCodeInput(e.target.value.toUpperCase())}
-                    placeholder="e.g. BATTLE-7X9"
-                    maxLength={12}
-                    className="w-full bg-[#0d1117] text-white text-sm font-mono uppercase px-3.5 py-2.5 rounded-lg border border-[#30363d] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-
-                <div className="p-2.5 rounded-lg bg-[#0d1117] border border-[#30363d] text-[11px] text-gray-400 space-y-1">
-                  <p className="leading-relaxed">
-                    Enter the code shared by your friend. Join as player 2, 3, 4, 5, or 6 (maximum 6 per room).
-                  </p>
-                </div>
-
+              ) : (
                 <button
                   type="button"
                   onClick={handleJoinRoom}
-                  className="w-full py-2.5 rounded-lg font-bold text-sm bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                  className="w-full py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-600/30 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
                 >
                   <Users className="w-4 h-4" />
                   <span>Join Arena Room</span>
                 </button>
-              </div>
-            )}
+              )}
 
-            {/* Solo Mode Alternative */}
-            <div className="mt-4 pt-3 border-t border-[#30363d]/60 text-center">
+              {/* Practice Solo Sandbox Action Button */}
               <button
                 type="button"
                 onClick={() => setShowLobbyModal(false)}
-                className="text-xs text-gray-400 hover:text-amber-300 transition underline underline-offset-2 cursor-pointer inline-flex items-center gap-1.5"
+                className="w-full py-2 px-3 rounded-lg text-xs font-semibold text-gray-300 hover:text-white bg-[#0d1117] hover:bg-[#21262d] border border-[#30363d] hover:border-gray-500 transition cursor-pointer flex items-center justify-center gap-2 group"
               >
+                <Code2 className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition" />
                 <span>Practice Solo in Sandbox Mode (Offline)</span>
                 {streakData.currentStreak > 0 && (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 no-underline">
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                     🔥 {streakData.currentStreak}d Streak
                   </span>
                 )}
-                <span>→</span>
+                <span className="text-gray-400 group-hover:translate-x-0.5 transition">→</span>
               </button>
             </div>
           </div>
