@@ -1,10 +1,10 @@
 /**
- * LeetCode Curated Problem Bank
+ * Code Arena Curated Problem Bank
  * Standard algorithmic problems with examples, constraints, test cases,
  * multi-language boilerplates (Python, C++, Java, C), and realistic bot solutions.
  */
 
-export const LEETCODE_PROBLEM_BANK = [
+export const CODE_ARENA_PROBLEM_BANK = [
   {
     "id": "two-sum",
     "title": "1. Two Sum",

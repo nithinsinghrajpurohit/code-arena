@@ -39,12 +39,64 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  ListFilter
+  ListFilter,
+  Calendar
 } from 'lucide-react';
-import { LEETCODE_PROBLEM_BANK, normalizeReviewLang, getOfficialSolution } from './leetcode_bank.js';
+import { CODE_ARENA_PROBLEM_BANK, normalizeReviewLang, getOfficialSolution } from './code_arena_bank.js';
+
+// Daily Streak Storage & Calculation Helpers
+const DAILY_STREAK_STORAGE_KEY = 'code_arena_daily_streak';
+
+const getLocalDateStr = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getYesterdayDateStr = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return getLocalDateStr(d);
+};
+
+const loadInitialDailyStreak = () => {
+  try {
+    const saved = localStorage.getItem(DAILY_STREAK_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const today = getLocalDateStr();
+      const yesterday = getYesterdayDateStr();
+
+      let current = Number(parsed.currentStreak) || 0;
+      // If user hasn't practiced today or yesterday, active consecutive streak has reset
+      if (parsed.lastActiveDate !== today && parsed.lastActiveDate !== yesterday) {
+        current = 0;
+      }
+      return {
+        currentStreak: current,
+        bestStreak: Number(parsed.bestStreak) || current || 0,
+        lastActiveDate: parsed.lastActiveDate || null,
+        activityDates: Array.isArray(parsed.activityDates) ? parsed.activityDates : [],
+        lastPracticedTime: parsed.lastPracticedTime || null,
+        totalPracticeSessions: Number(parsed.totalPracticeSessions) || 0
+      };
+    }
+  } catch (e) {
+    console.warn('Failed to parse daily streak from localStorage', e);
+  }
+  return {
+    currentStreak: 0,
+    bestStreak: 0,
+    lastActiveDate: null,
+    activityDates: [],
+    lastPracticedTime: null,
+    totalPracticeSessions: 0
+  };
+};
 
 // Default initial problem: 1. Two Sum
-const DEFAULT_PROBLEM = LEETCODE_PROBLEM_BANK[0];
+const DEFAULT_PROBLEM = CODE_ARENA_PROBLEM_BANK[0];
 
 // Boilerplate code templates for C, C++, Java, and Python
 const boilerplateCode = {
@@ -128,7 +180,7 @@ const BACKEND_URL =
     ? window.location.origin
     : 'http://localhost:5000');
 
-export default function LeetCodePlatform() {
+export default function CodeArenaPlatform() {
   // Socket.io Connection & Arena Room State
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -145,7 +197,7 @@ export default function LeetCodePlatform() {
   const [activeLobbyTab, setActiveLobbyTab] = useState('create'); // 'create' | 'join'
   const [copiedCode, setCopiedCode] = useState(false);
 
-  // LeetCode Problem Selection & Synchronized Active Challenge
+  // Code Arena Problem Selection & Synchronized Active Challenge
   const [currentProblem, setCurrentProblem] = useState(DEFAULT_PROBLEM);
   const [problemSelectionMode, setProblemSelectionMode] = useState('bank'); // 'bank' | 'difficulty' | 'ai_topic' | 'random'
   const [selectedProblemId, setSelectedProblemId] = useState('two-sum');
@@ -178,12 +230,67 @@ export default function LeetCodePlatform() {
   const [soloCategory, setSoloCategory] = useState('all'); // 'all' | 'Python Basics' | 'Algorithms'
   const [searchRoadmapQuery, setSearchRoadmapQuery] = useState('');
 
+  // Daily Streak in Practice Solo Sandbox State
+  const [streakData, setStreakData] = useState(() => loadInitialDailyStreak());
+  const [showStreakModal, setShowStreakModal] = useState(false);
+  const [showSubmitConfirmModal, setShowSubmitConfirmModal] = useState(false);
+
+  const isStreakActiveToday = streakData.lastActiveDate === getLocalDateStr();
+
+  const recordSoloPracticeActivity = (actionLabel = 'Practice') => {
+    const today = getLocalDateStr();
+    const yesterday = getYesterdayDateStr();
+
+    setStreakData((prev) => {
+      const alreadyActiveToday = prev.lastActiveDate === today;
+      let newStreak = prev.currentStreak;
+      let showToast = false;
+
+      if (!alreadyActiveToday) {
+        if (prev.lastActiveDate === yesterday) {
+          newStreak = (prev.currentStreak || 0) + 1;
+        } else {
+          newStreak = 1;
+        }
+        showToast = true;
+      }
+
+      const best = Math.max(prev.bestStreak || 0, newStreak);
+      const activityDatesSet = new Set(prev.activityDates || []);
+      activityDatesSet.add(today);
+
+      const nextData = {
+        currentStreak: newStreak,
+        bestStreak: best,
+        lastActiveDate: today,
+        activityDates: Array.from(activityDatesSet).slice(-60),
+        lastPracticedTime: Date.now(),
+        totalPracticeSessions: (prev.totalPracticeSessions || 0) + 1
+      };
+
+      try {
+        localStorage.setItem(DAILY_STREAK_STORAGE_KEY, JSON.stringify(nextData));
+      } catch (e) {}
+
+      if (showToast) {
+        setBattleToast({
+          title: '🔥 Daily Streak Maintained!',
+          message: `Awesome! You have kept your daily coding streak alive: ${newStreak} ${newStreak === 1 ? 'Day' : 'Days'}!`
+        });
+        setTimeout(() => setBattleToast(null), 4000);
+      }
+
+      return nextData;
+    });
+  };
+
   const toggleQuestionCompleted = (problemId) => {
     setCompletedQuestions((prev) => {
       const next = new Set(prev);
       const isNowCompleted = !next.has(problemId);
       if (isNowCompleted) {
         next.add(problemId);
+        recordSoloPracticeActivity('Question Completed');
         setBattleToast({
           title: '🎉 Marked Completed!',
           message: 'Question marked as completed in your Solo Track.'
@@ -200,6 +307,7 @@ export default function LeetCodePlatform() {
   };
 
   const markQuestionCompleted = (problemId) => {
+    recordSoloPracticeActivity('Question Solved');
     setCompletedQuestions((prev) => {
       if (prev.has(problemId)) return prev;
       const next = new Set(prev);
@@ -212,7 +320,7 @@ export default function LeetCodePlatform() {
   };
 
   // Filtered problem progression list
-  const filteredSoloProblems = LEETCODE_PROBLEM_BANK.filter((p) => {
+  const filteredSoloProblems = CODE_ARENA_PROBLEM_BANK.filter((p) => {
     if (soloCategory === 'Python Basics') return p.category === 'Python Basics' || p.tags?.includes('Python Basics');
     if (soloCategory === 'Algorithms') return p.category !== 'Python Basics' && !p.tags?.includes('Python Basics');
     return true;
@@ -359,7 +467,7 @@ export default function LeetCodePlatform() {
       if (problem) {
         setCurrentProblem(problem);
       }
-      const title = problem?.title || 'the LeetCode Challenge';
+      const title = problem?.title || 'the Code Arena Challenge';
       setBattleToast({
         title: '⚔️ BATTLE STARTED!',
         message: `The timer is ticking! Solve ${title} before time runs out.`
@@ -692,6 +800,11 @@ export default function LeetCodePlatform() {
           stdout: outputLines,
           errorTip: null
         });
+
+        // Record solo practice activity to maintain daily streak
+        if (!inRoom) {
+          recordSoloPracticeActivity('Sandbox Run');
+        }
       } else {
         setExecutionData({
           status: 'Execution Error',
@@ -725,6 +838,7 @@ export default function LeetCodePlatform() {
       if (isSubmitting) return;
       setIsSubmitting(true);
       setBottomTab('ai-feedback');
+      recordSoloPracticeActivity('Sandbox Submit');
 
       try {
         const response = await fetch(`${BACKEND_URL}/api/verify`, {
@@ -783,7 +897,15 @@ export default function LeetCodePlatform() {
       alert('Please join an arena room to submit.');
       return;
     }
-    if (isSubmitting || hasSubmitted) return;
+    if (isSubmitting || hasSubmitted || isTimeExpired || isBattleEnded) return;
+
+    // Trigger explicit confirmation modal to warn that submitted code cannot be edited again!
+    setShowSubmitConfirmModal(true);
+  };
+
+  const confirmArenaSubmit = () => {
+    setShowSubmitConfirmModal(false);
+    if (!socket || !roomState || isSubmitting || hasSubmitted || isTimeExpired || isBattleEnded) return;
 
     setIsSubmitting(true);
     setBottomTab('ai-feedback');
@@ -797,11 +919,15 @@ export default function LeetCodePlatform() {
     });
   };
 
-  // Timer Formatter: MM:SS
+  // Timer Formatter: MM:SS or HH:MM:SS
   const formatSeconds = (sec) => {
     const total = Math.max(0, Number(sec) || 0);
-    const m = Math.floor(total / 60);
+    const hrs = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
     const s = total % 60;
+    if (hrs > 0) {
+      return `${hrs.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
@@ -965,6 +1091,26 @@ export default function LeetCodePlatform() {
 
           {!inRoom && (
             <div className="flex items-center space-x-2">
+              {/* Daily Streak Indicator Badge */}
+              <button
+                type="button"
+                onClick={() => setShowStreakModal(true)}
+                className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
+                  isStreakActiveToday
+                    ? 'bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-red-500/20 border-amber-500/50 text-amber-300 shadow-md shadow-amber-500/10 hover:border-amber-400'
+                    : 'bg-[#21262d] border-[#30363d] text-gray-400 hover:text-amber-300 hover:border-amber-500/40'
+                }`}
+                title="View your Daily Practice Streak details"
+              >
+                <Flame className={`w-3.5 h-3.5 ${isStreakActiveToday ? 'text-amber-400 fill-amber-400 animate-pulse' : 'text-gray-500'}`} />
+                <span>{streakData.currentStreak} Day Streak</span>
+                {isStreakActiveToday ? (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ring-2 ring-emerald-400/40" title="Active today!" />
+                ) : (
+                  <span className="text-[10px] text-amber-400/80 font-normal">Active today?</span>
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={() => setShowQuestionRoadmap(true)}
@@ -972,7 +1118,7 @@ export default function LeetCodePlatform() {
                 title="View line-by-line questions curriculum"
               >
                 <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Practice Track ({completedQuestions.size}/{LEETCODE_PROBLEM_BANK.length})</span>
+                <span>Practice Track ({completedQuestions.size}/{CODE_ARENA_PROBLEM_BANK.length})</span>
               </button>
 
               <button
@@ -1030,9 +1176,9 @@ export default function LeetCodePlatform() {
                   className="bg-[#0d1117] text-gray-300 border border-[#30363d] rounded-lg px-2 py-1 text-[11px] font-medium outline-none cursor-pointer"
                   title="Filter track by category"
                 >
-                  <option value="all">All Tracks ({LEETCODE_PROBLEM_BANK.length})</option>
+                  <option value="all">All Tracks ({CODE_ARENA_PROBLEM_BANK.length})</option>
                   <option value="Python Basics">🐍 Python Basics (10)</option>
-                  <option value="Algorithms">⚡ LeetCode Curated (7)</option>
+                  <option value="Algorithms">⚡ Code Arena Curated (7)</option>
                 </select>
               </div>
 
@@ -1349,7 +1495,7 @@ export default function LeetCodePlatform() {
                   <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
                   <span>
                     {hasSubmitted
-                      ? '🔒 CODE SUBMITTED — Editor locked. Awaiting battle completion & final leaderboard.'
+                      ? '🔒 CODE SUBMITTED — Once submitted, code cannot be edited again. Editor locked.'
                       : isTimeExpired || isBattleEnded
                       ? '🔒 BATTLE TIME EXPIRED — Code editor locked! No further code edits permitted.'
                       : '🔒 Editor Locked'}
@@ -1434,6 +1580,16 @@ export default function LeetCodePlatform() {
 
               {/* Action Buttons: Run Code & Submit to Arena */}
               <div className="flex items-center space-x-2">
+                {inRoom && !hasSubmitted && (
+                  <div
+                    className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded bg-rose-950/60 border border-rose-500/40 text-[11px] text-rose-300 font-medium"
+                    title="Once code is submitted, it cannot be edited again"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                    <span>Once submitted, code <strong>cannot be edited again</strong></span>
+                  </div>
+                )}
+
                 <button
                   onClick={handleRunCode}
                   disabled={isRunning || isSubmitting || isEditorLocked}
@@ -1448,7 +1604,15 @@ export default function LeetCodePlatform() {
                   onClick={handleArenaSubmit}
                   disabled={inRoom ? (isSubmitting || hasSubmitted || isTimeExpired || isBattleEnded) : isSubmitting}
                   className="flex items-center space-x-1.5 px-3.5 py-1 rounded text-xs font-bold bg-gradient-to-r from-amber-600 via-emerald-600 to-teal-600 hover:from-amber-500 hover:to-teal-500 text-white shadow-md shadow-emerald-500/20 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  title={inRoom ? 'Submit code for battle evaluation' : 'Submit solution to verify and mark completed'}
+                  title={
+                    inRoom
+                      ? hasSubmitted
+                        ? 'Code submitted (Editor locked)'
+                        : 'Submit code for battle evaluation. WARNING: Once submitted, code cannot be edited again!'
+                      : completedQuestions.has(currentProblem.id)
+                      ? 'Resubmit Solution ✨'
+                      : 'Submit Solution ✨'
+                  }
                 >
                   {isSubmitting ? (
                     <Sparkles className="w-3.5 h-3.5 animate-spin" />
@@ -1737,7 +1901,7 @@ export default function LeetCodePlatform() {
             </div>
 
             {/* Tabs: Create vs Join */}
-            <div className="flex p-1 rounded-lg bg-[#0d1117] border border-[#30363d] mb-5">
+            <div className="flex p-1 rounded-lg bg-[#0d1117] border border-[#30363d] mb-4">
               <button
                 type="button"
                 onClick={() => setActiveLobbyTab('create')}
@@ -1762,36 +1926,79 @@ export default function LeetCodePlatform() {
               </button>
             </div>
 
+            {/* Arena Battle Rules Callout Banner */}
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300 mb-4">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-amber-200">Arena Battle Rule:</strong> Once your code is submitted, it <span className="underline decoration-amber-400 font-bold">cannot be edited again</span>. Always test your solution thoroughly using the "Run" button before submitting!
+              </div>
+            </div>
+
             {/* Tab 1: Create Arena Room */}
             {activeLobbyTab === 'create' && (
               <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-400">Battle Duration</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDuration(900)}
-                      className={`p-2.5 rounded-lg border text-xs font-medium transition text-center ${
-                        selectedDuration === 900
-                          ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 font-bold'
-                          : 'bg-[#0d1117] border-[#30363d] text-gray-400 hover:border-gray-500'
-                      }`}
-                    >
-                      <div>15 Minutes</div>
-                      <div className="text-[10px] text-gray-500">Standard Battle</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDuration(1800)}
-                      className={`p-2.5 rounded-lg border text-xs font-medium transition text-center ${
-                        selectedDuration === 1800
-                          ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 font-bold'
-                          : 'bg-[#0d1117] border-[#30363d] text-gray-400 hover:border-gray-500'
-                      }`}
-                    >
-                      <div>30 Minutes</div>
-                      <div className="text-[10px] text-gray-500">Epic Match</div>
-                    </button>
+                {/* Battle Duration (Adjustable up to Max 1 Hour) */}
+                <div className="space-y-2.5 bg-[#0d1117] p-3 rounded-xl border border-[#30363d]">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Battle Duration</span>
+                    </label>
+                    <span className="text-xs font-mono font-bold text-emerald-300 bg-emerald-950/70 border border-emerald-500/40 px-2 py-0.5 rounded">
+                      {Math.round(selectedDuration / 60)} Minutes {selectedDuration === 3600 ? '(1 Hour Max)' : ''}
+                    </span>
+                  </div>
+
+                  {/* Preset Pills (5m, 15m, 30m, 45m, 60m / 1h) */}
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {[
+                      { sec: 300, label: '5m', sub: 'Sprint' },
+                      { sec: 900, label: '15m', sub: 'Standard' },
+                      { sec: 1800, label: '30m', sub: 'Epic' },
+                      { sec: 2700, label: '45m', sub: 'Master' },
+                      { sec: 3600, label: '60m', sub: '1 Hour' }
+                    ].map((preset) => {
+                      const isSelected = selectedDuration === preset.sec;
+                      return (
+                        <button
+                          key={preset.sec}
+                          type="button"
+                          onClick={() => setSelectedDuration(preset.sec)}
+                          className={`py-1.5 px-1 rounded-lg border text-center transition cursor-pointer flex flex-col items-center justify-center ${
+                            isSelected
+                              ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 font-bold ring-1 ring-emerald-500/50 shadow-md shadow-emerald-500/20'
+                              : 'bg-[#161b22] border-[#30363d] text-gray-400 hover:border-gray-500 hover:text-white'
+                          }`}
+                        >
+                          <span className="text-xs font-bold font-mono">{preset.label}</span>
+                          <span className="text-[8px] text-gray-500 font-semibold">{preset.sub}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Interactive Slider up to 1 Hour (60 minutes) */}
+                  <div className="space-y-1 pt-1">
+                    <div className="flex items-center justify-between text-[10px] text-gray-400">
+                      <span>Adjust Duration (5 - 60 mins):</span>
+                      <span className="text-gray-400 font-mono">Max: 1 Hour (60m)</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={300}
+                      max={3600}
+                      step={300}
+                      value={selectedDuration}
+                      onChange={(e) => setSelectedDuration(Number(e.target.value))}
+                      className="w-full h-1.5 bg-[#21262d] rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                    />
+                    <div className="flex justify-between text-[9px] text-gray-500 font-mono px-0.5">
+                      <span>5m</span>
+                      <span>15m</span>
+                      <span>30m</span>
+                      <span>45m</span>
+                      <span className="text-emerald-400 font-bold">60m (1h)</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1836,12 +2043,12 @@ export default function LeetCodePlatform() {
                   </div>
                 </div>
 
-                {/* LeetCode Challenge & AI Problem Selection */}
+                {/* Code Arena Challenge & AI Problem Selection */}
                 <div className="space-y-2 pt-2 border-t border-[#30363d]/70">
                   <div className="flex items-center justify-between text-xs">
                     <label className="font-semibold text-gray-300 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span>LeetCode Challenge & AI Search</span>
+                      <span>Code Arena Challenge & AI Search</span>
                     </label>
                     <span className="text-[10px] text-amber-400 font-mono">Gemini 2.5 Active</span>
                   </div>
@@ -1892,21 +2099,21 @@ export default function LeetCodePlatform() {
                           const id = e.target.value;
                           setSelectedProblemId(id);
                           if (!inRoom) {
-                            const p = LEETCODE_PROBLEM_BANK.find((item) => item.id === id);
+                            const p = CODE_ARENA_PROBLEM_BANK.find((item) => item.id === id);
                             if (p) setCurrentProblem(p);
                           }
                         }}
                         className="w-full bg-[#0d1117] text-white text-xs px-3 py-2 rounded-lg border border-[#30363d] focus:outline-none focus:ring-1 focus:ring-amber-500 appearance-none cursor-pointer"
                       >
                         <optgroup label="🐍 Python Basics (10 Questions)">
-                          {LEETCODE_PROBLEM_BANK.filter((p) => p.category === 'Python Basics' || p.tags?.includes('Python Basics')).map((p) => (
+                          {CODE_ARENA_PROBLEM_BANK.filter((p) => p.category === 'Python Basics' || p.tags?.includes('Python Basics')).map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.title} ({p.difficulty})
                             </option>
                           ))}
                         </optgroup>
-                        <optgroup label="⚡ LeetCode Algorithmic Bank (7 Questions)">
-                          {LEETCODE_PROBLEM_BANK.filter((p) => p.category !== 'Python Basics' && !p.tags?.includes('Python Basics')).map((p) => (
+                        <optgroup label="⚡ Code Arena Algorithmic Bank (7 Questions)">
+                          {CODE_ARENA_PROBLEM_BANK.filter((p) => p.category !== 'Python Basics' && !p.tags?.includes('Python Basics')).map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.title} ({p.difficulty})
                             </option>
@@ -1983,7 +2190,7 @@ export default function LeetCodePlatform() {
                     </span>
                   </div>
                   <p className="text-gray-400 leading-relaxed text-[11px]">
-                    Synchronized LeetCode challenge for all {selectedMaxParticipants} members. Fastest passing solution intime wins!
+                    Synchronized Code Arena challenge for all {selectedMaxParticipants} members. Fastest passing solution intime wins!
                   </p>
                 </div>
 
@@ -2035,9 +2242,15 @@ export default function LeetCodePlatform() {
               <button
                 type="button"
                 onClick={() => setShowLobbyModal(false)}
-                className="text-xs text-gray-400 hover:text-amber-300 transition underline underline-offset-2 cursor-pointer"
+                className="text-xs text-gray-400 hover:text-amber-300 transition underline underline-offset-2 cursor-pointer inline-flex items-center gap-1.5"
               >
-                Practice Solo in Sandbox Mode (Offline) →
+                <span>Practice Solo in Sandbox Mode (Offline)</span>
+                {streakData.currentStreak > 0 && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 no-underline">
+                    🔥 {streakData.currentStreak}d Streak
+                  </span>
+                )}
+                <span>→</span>
               </button>
             </div>
           </div>
@@ -2872,11 +3085,11 @@ export default function LeetCodePlatform() {
       {/* 6. SOLO LINE-BY-LINE QUESTION CURRICULUM DRAWER                    */}
       {/* ------------------------------------------------------------------ */}
       {showQuestionRoadmap && (() => {
-        const totalCount = LEETCODE_PROBLEM_BANK.length;
+        const totalCount = CODE_ARENA_PROBLEM_BANK.length;
         const completedCount = completedQuestions.size;
         const percent = Math.round((completedCount / totalCount) * 100);
 
-        const displayedQuestions = LEETCODE_PROBLEM_BANK.filter((p) => {
+        const displayedQuestions = CODE_ARENA_PROBLEM_BANK.filter((p) => {
           const matchesCategory =
             soloCategory === 'all'
               ? true
@@ -2892,7 +3105,7 @@ export default function LeetCodePlatform() {
           return matchesCategory && matchesQuery;
         });
 
-        const nextUnsolved = LEETCODE_PROBLEM_BANK.find((p) => !completedQuestions.has(p.id));
+        const nextUnsolved = CODE_ARENA_PROBLEM_BANK.find((p) => !completedQuestions.has(p.id));
 
         return (
           <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex justify-start animate-in fade-in duration-150">
@@ -2921,6 +3134,30 @@ export default function LeetCodePlatform() {
 
               {/* Progress Summary Card */}
               <div className="p-4 bg-[#11161d] border-b border-[#30363d] space-y-3 shrink-0">
+                {/* Daily Streak Banner in Drawer */}
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-transparent border border-amber-500/30">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                      <Flame className={`w-4 h-4 ${isStreakActiveToday ? 'text-amber-400 fill-amber-400 animate-pulse' : 'text-gray-400'}`} />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-amber-300">
+                        {streakData.currentStreak} Day Practice Streak
+                      </div>
+                      <div className="text-[10px] text-gray-400">
+                        {isStreakActiveToday ? 'Streak maintained today!' : 'Practice today to maintain streak'}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowStreakModal(true)}
+                    className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 underline underline-offset-2 cursor-pointer"
+                  >
+                    View Details →
+                  </button>
+                </div>
+
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-gray-300">Overall Progress</span>
                   <span className="font-mono text-emerald-400 font-bold">
@@ -2969,7 +3206,7 @@ export default function LeetCodePlatform() {
                         : 'bg-[#21262d] text-gray-400 hover:text-white'
                     }`}
                   >
-                    ⚡ LeetCode Bank (7)
+                    ⚡ Code Arena Bank (7)
                   </button>
                 </div>
 
@@ -3101,6 +3338,191 @@ export default function LeetCodePlatform() {
           </div>
         );
       })()}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* 7. DAILY PRACTICE STREAK MODAL (Solo Sandbox)                       */}
+      {/* ------------------------------------------------------------------ */}
+      {showStreakModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-[#161b22] border border-amber-500/40 rounded-2xl shadow-2xl p-6 relative overflow-hidden flex flex-col">
+            {/* Background ambient glow */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-32 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setShowStreakModal(false)}
+              className="absolute top-4 right-4 p-1.5 text-gray-400 hover:text-white hover:bg-[#21262d] rounded-lg transition cursor-pointer"
+              title="Close"
+            >
+              <XCircle className="w-5 h-5" />
+            </button>
+
+            {/* Mascot / Flame Header */}
+            <div className="text-center pb-3 relative">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-orange-500/20 to-red-500/20 border border-amber-500/40 flex items-center justify-center mx-auto mb-3 shadow-xl shadow-orange-500/20">
+                <Flame className="w-9 h-9 text-amber-400 fill-amber-400 animate-pulse" />
+              </div>
+              <h3 className="text-2xl font-black text-white tracking-tight">
+                {streakData.currentStreak} Day Practice Streak
+              </h3>
+              <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto leading-relaxed">
+                {isStreakActiveToday
+                  ? '🔥 You have kept your daily streak alive for today! Continue solving problems to build your coding muscle.'
+                  : '⚡ Practice today in the Solo Sandbox (run code or submit a solution) to maintain your daily streak!'}
+              </p>
+            </div>
+
+            {/* 7-Day Activity Strip */}
+            <div className="my-3 p-3.5 bg-[#0d1117] rounded-xl border border-[#30363d] space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-gray-300">
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Last 7 Days Activity</span>
+                </span>
+                <span className="text-[10px] text-amber-400 font-mono">
+                  {isStreakActiveToday ? '● Practiced Today' : '○ Needs Practice'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1.5 pt-1">
+                {Array.from({ length: 7 }).map((_, idx) => {
+                  const d = new Date();
+                  d.setDate(d.getDate() - (6 - idx));
+                  const dateStr = getLocalDateStr(d);
+                  const isToday = idx === 6;
+                  const dayName = d.toLocaleDateString('en-US', { weekday: 'narrow' });
+                  const dateNum = d.getDate();
+                  const isPracticed = streakData.activityDates?.includes(dateStr) || (isToday && isStreakActiveToday);
+
+                  return (
+                    <div
+                      key={dateStr}
+                      className={`flex flex-col items-center py-2 px-1 rounded-lg border text-center transition ${
+                        isToday
+                          ? 'border-amber-500/60 bg-amber-950/30 ring-1 ring-amber-500/40'
+                          : 'border-[#30363d] bg-[#161b22]'
+                      }`}
+                    >
+                      <span className="text-[10px] text-gray-400 font-semibold">{dayName}</span>
+                      <span className="text-xs font-bold text-gray-200 mt-0.5">{dateNum}</span>
+                      <div className="mt-1.5">
+                        {isPracticed ? (
+                          <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-400/60 flex items-center justify-center text-amber-400">
+                            <Flame className="w-3 h-3 fill-amber-400" />
+                          </div>
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-[#21262d] border border-[#30363d] flex items-center justify-center">
+                            <div className="w-1.5 h-1.5 rounded-full bg-gray-600" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Streak Metrics Cards */}
+            <div className="grid grid-cols-3 gap-2 text-center mb-4">
+              <div className="p-2.5 rounded-xl bg-[#0d1117] border border-[#30363d]">
+                <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Current</div>
+                <div className="text-lg font-black text-amber-400 font-mono mt-0.5">{streakData.currentStreak}</div>
+                <div className="text-[9px] text-gray-500">Days</div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[#0d1117] border border-[#30363d]">
+                <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Best Record</div>
+                <div className="text-lg font-black text-emerald-400 font-mono mt-0.5">{streakData.bestStreak}</div>
+                <div className="text-[9px] text-gray-500">Days</div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[#0d1117] border border-[#30363d]">
+                <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Problems Solved</div>
+                <div className="text-lg font-black text-indigo-400 font-mono mt-0.5">{completedQuestions.size}</div>
+                <div className="text-[9px] text-gray-500">Completed</div>
+              </div>
+            </div>
+
+            {/* Modal Bottom Action Button */}
+            <button
+              type="button"
+              onClick={() => setShowStreakModal(false)}
+              className="w-full py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-lg shadow-orange-600/20 transition cursor-pointer"
+            >
+              Continue Solo Sandbox Practice
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* 8. ARENA CODE SUBMISSION CONFIRMATION MODAL                         */}
+      {/* ------------------------------------------------------------------ */}
+      {showSubmitConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-[#161b22] border border-amber-500/50 rounded-2xl shadow-2xl p-6 relative overflow-hidden flex flex-col">
+            {/* Warning Icon & Heading */}
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                <AlertCircle className="w-7 h-7 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Submit Final Arena Solution?</h3>
+                <p className="text-xs text-gray-400">Battle Room: {roomState?.roomCode}</p>
+              </div>
+            </div>
+
+            {/* Critical Warning Callout */}
+            <div className="p-3.5 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-200 text-xs space-y-2 mb-4">
+              <div className="flex items-center gap-1.5 font-bold text-rose-300 text-sm">
+                <span>⚠️ Important Arena Rule</span>
+              </div>
+              <p className="font-semibold text-rose-200">
+                Once your code is submitted, it <u>CANNOT be edited again</u>!
+              </p>
+              <p className="text-gray-300 text-[11px] leading-relaxed">
+                Your code editor will be locked into read-only mode for the remainder of this match while your solution is evaluated by the battle engine and ranked against other contenders.
+              </p>
+            </div>
+
+            {/* Current Submission Summary */}
+            <div className="p-3 rounded-lg bg-[#0d1117] border border-[#30363d] space-y-1 text-xs mb-5 font-mono">
+              <div className="flex justify-between text-gray-400">
+                <span>Problem:</span>
+                <span className="text-white font-semibold font-sans">{currentProblem.title}</span>
+              </div>
+              <div className="flex justify-between text-gray-400">
+                <span>Language:</span>
+                <span className="text-emerald-400 font-semibold">{LANGUAGE_LABELS[selectedLanguage]?.label || selectedLanguage}</span>
+              </div>
+              <div className="flex justify-between text-gray-400">
+                <span>Execution Status:</span>
+                <span className="text-amber-400">{executionData.status}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowSubmitConfirmModal(false)}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-gray-300 bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] transition cursor-pointer"
+              >
+                Cancel & Keep Editing
+              </button>
+              <button
+                type="button"
+                onClick={confirmArenaSubmit}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-amber-600 via-emerald-600 to-teal-600 hover:from-amber-500 hover:to-teal-500 shadow-lg shadow-emerald-600/30 transition active:scale-95 cursor-pointer flex items-center space-x-1.5"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Confirm & Submit Final Code</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

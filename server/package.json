@@ -1,5 +1,5 @@
 {
-  "name": "leetcode-backend-api",
+  "name": "code-arena-backend-api",
   "version": "1.0.0",
   "description": "Express backend for code execution (Judge0) and AI verification (Google Gen AI SDK Gemini 2.5 Flash)",
   "main": "server.js",

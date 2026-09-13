@@ -10,7 +10,7 @@ import os from 'os';
 import { exec } from 'child_process';
 import util from 'util';
 import { GoogleGenAI } from '@google/genai';
-import { LEETCODE_PROBLEM_BANK } from './leetcode_bank.js';
+import { CODE_ARENA_PROBLEM_BANK } from './code_arena_bank.js';
 
 const execPromise = util.promisify(exec);
 
@@ -108,9 +108,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// LeetCode Problem Bank List Endpoint
+// Code Arena Problem Bank List Endpoint
 app.get('/api/problems', (req, res) => {
-  const list = LEETCODE_PROBLEM_BANK.map((p) => ({
+  const list = CODE_ARENA_PROBLEM_BANK.map((p) => ({
     id: p.id,
     title: p.title,
     difficulty: p.difficulty,
@@ -122,15 +122,15 @@ app.get('/api/problems', (req, res) => {
 
 /**
  * ============================================================================
- * Helper: AI LeetCode Problem Fetcher / Generator (Gemini 2.5 Flash + Bank Fallback)
+ * Helper: AI Code Arena Problem Fetcher / Generator (Gemini 2.5 Flash + Bank Fallback)
  * ============================================================================
  */
-async function fetchOrGenerateLeetCodeProblem(preference = {}) {
+async function fetchOrGenerateArenaProblem(preference = {}) {
   const { type = 'random', problemId, difficulty, query } = preference;
 
   // 1. Direct match by problem ID in Bank
   if (problemId) {
-    const found = LEETCODE_PROBLEM_BANK.find((p) => p.id === problemId);
+    const found = CODE_ARENA_PROBLEM_BANK.find((p) => p.id === problemId);
     if (found) {
       console.log(`[ARENA PROBLEM] Loaded from bank by ID: ${found.title}`);
       return found;
@@ -140,7 +140,7 @@ async function fetchOrGenerateLeetCodeProblem(preference = {}) {
   // 2. Query search in bank or generate via Gemini
   if (query && typeof query === 'string' && query.trim() !== '') {
     const qLower = query.toLowerCase().trim();
-    const matchedBank = LEETCODE_PROBLEM_BANK.find(
+    const matchedBank = CODE_ARENA_PROBLEM_BANK.find(
       (p) =>
         p.title.toLowerCase().includes(qLower) ||
         p.tags.some((t) => t.toLowerCase().includes(qLower)) ||
@@ -151,13 +151,13 @@ async function fetchOrGenerateLeetCodeProblem(preference = {}) {
       return matchedBank;
     }
 
-    // Call Gemini 2.5 Flash to dynamically create / search the LeetCode problem
+    // Call Gemini 2.5 Flash to dynamically create / search the Code Arena problem
     const aiClient = getAiClient();
     if (aiClient) {
       try {
-        console.log(`[ARENA PROBLEM] Querying Gemini 2.5 Flash for LeetCode problem: "${query}"...`);
+        console.log(`[ARENA PROBLEM] Querying Gemini 2.5 Flash for Code Arena problem: "${query}"...`);
         const prompt = `You are an expert algorithms instructor and competitive programming platform engine.
-Create or fetch an official LeetCode algorithmic problem matching the query: "${query}".
+Create or fetch an official Code Arena algorithmic problem matching the query: "${query}".
 Difficulty preference: ${difficulty || 'Medium'}.
 
 CRITICAL: Respond ONLY with a valid, raw JSON object (no markdown, no backticks, no wrapping text):
@@ -236,7 +236,7 @@ CRITICAL: Respond ONLY with a valid, raw JSON object (no markdown, no backticks,
 
   // 3. Filter by difficulty from Bank
   if (difficulty && difficulty !== 'Random') {
-    const diffMatches = LEETCODE_PROBLEM_BANK.filter(
+    const diffMatches = CODE_ARENA_PROBLEM_BANK.filter(
       (p) => p.difficulty.toLowerCase() === difficulty.toLowerCase()
     );
     if (diffMatches.length > 0) {
@@ -247,7 +247,7 @@ CRITICAL: Respond ONLY with a valid, raw JSON object (no markdown, no backticks,
   }
 
   // 4. Default: Random pick from curated bank
-  const randomProb = LEETCODE_PROBLEM_BANK[Math.floor(Math.random() * LEETCODE_PROBLEM_BANK.length)];
+  const randomProb = CODE_ARENA_PROBLEM_BANK[Math.floor(Math.random() * CODE_ARENA_PROBLEM_BANK.length)];
   console.log(`[ARENA PROBLEM] Selected random problem from bank: ${randomProb.title}`);
   return randomProb;
 }
@@ -262,7 +262,7 @@ async function executeLocally(langKey, source_code) {
   let isError = false;
 
   if (langKey === 'python') {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'leetcode-py-'));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codearena-py-'));
     const tempFile = path.join(tempDir, 'solution.py');
     fs.writeFileSync(tempFile, source_code, 'utf8');
 
@@ -278,7 +278,7 @@ async function executeLocally(langKey, source_code) {
       try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (e) {}
     }
   } else if (langKey === 'java') {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'leetcode-java-'));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codearena-java-'));
     const match = source_code.match(/(?:public\s+)?class\s+([A-Za-z0-9_]+)/);
     const className = match ? match[1] : 'Main';
     const tempFile = path.join(tempDir, `${className}.java`);
@@ -688,7 +688,7 @@ async function evaluateSubmissionWithAi(user_code, language = 'Python', executio
   if (aiClient) {
     try {
       const systemInstruction = `You are a Principal Software Engineer and expert Competitive Programming Judge.
-Review the candidate's code submission for LeetCode problem: "${problemTitle}".
+Review the candidate's code submission for Code Arena problem: "${problemTitle}".
 Problem Description:
 ${problemDesc}
 Test cases to evaluate against:
@@ -991,7 +991,7 @@ function serializeRoom(room) {
 io.on('connection', (socket) => {
   console.log(`[ARENA] Client connected: ${socket.id}`);
 
-  // 1. Create Room (with selected capacity from 2 up to 6 members and LeetCode problem preference)
+  // 1. Create Room (with selected capacity from 2 up to 6 members and Code Arena problem preference)
   socket.on('create_room', async ({ nickname = 'Contender', durationSeconds = 900, maxParticipants = 6, problemPreference = {} }) => {
     let code;
     do {
@@ -999,14 +999,15 @@ io.on('connection', (socket) => {
     } while (rooms.has(code));
 
     const capacity = Math.min(6, Math.max(2, Number(maxParticipants) || 6));
-    const selectedProblem = await fetchOrGenerateLeetCodeProblem(problemPreference);
+    const selectedProblem = await fetchOrGenerateArenaProblem(problemPreference);
+    const clampedDuration = Math.min(3600, Math.max(60, Number(durationSeconds) || 900));
 
     const newRoom = {
       roomCode: code,
       hostId: socket.id,
       status: 'waiting',
-      durationSeconds: Number(durationSeconds) || 900,
-      timeRemaining: Number(durationSeconds) || 900,
+      durationSeconds: clampedDuration,
+      timeRemaining: clampedDuration,
       maxParticipants: capacity,
       problem: selectedProblem,
       startedAt: null,

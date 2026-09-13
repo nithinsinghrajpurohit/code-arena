@@ -17,7 +17,7 @@
   - Create or join rooms with unique 6-character room codes (e.g. `BATTLE-7X9`).
   - Configurable room capacity (from 2 up to 6 contenders: 1v1 Duels, 3-Way, Squads, or 6-Player Arenas).
   - Add or remove AI Bot contenders with simulated typing waves and organic submissions.
-- **AI-Powered LeetCode Problems**:
+- **AI-Powered Code Arena Problems**:
   - Dynamic algorithmic challenge generation and search powered by **Google Gemini 2.5 Flash**.
   - Built-in curated classics bank (Two Sum, Valid Parentheses, Best Time to Buy and Sell Stock, Container With Most Water, Maximum Subarray, etc.).
   - Synchronized challenge specifications, test cases, and multi-language boilerplates across all room participants.
