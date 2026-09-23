@@ -2321,33 +2321,92 @@ export default function CodeArenaPlatform() {
       {/* ------------------------------------------------------------------ */}
       {/* 4. POST-BATTLE RESULTS LEADERBOARD MODAL                           */}
       {/* ------------------------------------------------------------------ */}
+      <AnimatePresence>
       {showLeaderboardModal && leaderboardData && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-3xl bg-[#161b22] border border-amber-500/40 rounded-2xl shadow-2xl p-6 relative overflow-hidden flex flex-col max-h-[90vh]">
-            {/* Winner Spotlight Banner */}
-            <div className="text-center pb-4 border-b border-[#30363d] relative">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/50 text-amber-400 mb-2 shadow-xl shadow-amber-500/20">
-                <Trophy className="w-8 h-8 animate-bounce" />
+        <motion.div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xl flex items-center justify-center p-4"
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ duration: 0.25 }}
+        >
+          <motion.div
+            className="w-full max-w-3xl bg-[#0c0c0f] border border-white/10 rounded-3xl shadow-2xl p-6 relative overflow-hidden flex flex-col max-h-[92vh]"
+            initial={{ opacity: 0, y: 28, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 240, damping: 24 }}
+          >
+            {/* Gold ambient wash */}
+            <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(60% 42% at 50% -6%, rgba(245,197,107,0.16), transparent 70%)' }} />
+            {/* Confetti burst (only with a winner) */}
+            {winnerInfo && (
+              <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                {[...Array(16)].map((_, i) => (
+                  <motion.span key={i} className="absolute top-[-8%] w-1.5 h-2.5 rounded-sm"
+                    style={{ left: `${(i * 6 + 4) % 100}%`, background: ['#f5c56b', '#818cf8', '#34d399', '#ffffff'][i % 4] }}
+                    initial={{ y: -20, opacity: 0, rotate: 0 }}
+                    animate={{ y: '130vh', opacity: [0, 1, 1, 0], rotate: 400 }}
+                    transition={{ duration: 2.6 + (i % 5) * 0.4, delay: (i % 7) * 0.12, ease: 'easeIn' }} />
+                ))}
               </div>
-              <h2 className="font-arcade text-xl tracking-tight">ARENA BATTLE RESULTS</h2>
-
+            )}
+            {/* CHAMPION HERO */}
+            <div className="relative z-10 text-center pb-4">
+              <motion.div
+                initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 200, damping: 12, delay: 0.1 }}
+                className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#f5c56b]/12 border border-[#f5c56b]/40 text-[#f5c56b] mb-3"
+              >
+                <Trophy className="w-9 h-9" />
+              </motion.div>
+              <p className="text-[11px] uppercase tracking-[0.3em] text-[#f5c56b]/90 font-bold">Arena Battle Results</p>
               {winnerInfo ? (
-                <div className="mt-2 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold shadow-lg shadow-amber-500/10 animate-pulse">
-                  <Crown className="w-4 h-4 text-amber-400" />
-                  <span>
-                    🏆 Arena Champion: <strong>{winnerInfo.nickname}</strong> — Solved in {winnerInfo.timeTaken} with {winnerInfo.accuracyScore}% Accuracy!
-                  </span>
-                </div>
+                <>
+                  <h2 className="mt-1.5 text-2xl font-black tracking-tight text-white flex items-center justify-center gap-2">
+                    <Crown className="w-6 h-6 text-[#f5c56b]" />
+                    {winnerInfo.nickname}
+                  </h2>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    Champion &middot; solved in {winnerInfo.timeTaken} &middot; {winnerInfo.accuracyScore}% accuracy
+                  </p>
+                </>
               ) : (
-                <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-800/80 border border-gray-700 text-gray-400 text-xs">
-                  <span>Battle Concluded — No contenders completed in time with correct solution.</span>
-                </div>
+                <h2 className="mt-1.5 text-xl font-bold text-zinc-300">Battle Concluded — no clean solve in time</h2>
               )}
             </div>
+            {/* PODIUM — top finishers */}
+            {(() => {
+              const passed = leaderboardData.filter((p) => p.status === 'Accepted').slice(0, 3);
+              if (passed.length < 2) return null;
+              const order = passed.length >= 3 ? [passed[1], passed[0], passed[2]] : [passed[1], passed[0]];
+              const styleFor = (rank) =>
+                rank === 1 ? { h: 'h-24', ring: 'border-[#f5c56b]/70', badge: '🥇', tint: 'rgba(245,197,107,0.16)' }
+                : rank === 2 ? { h: 'h-16', ring: 'border-zinc-300/50', badge: '🥈', tint: 'rgba(212,212,216,0.10)' }
+                : { h: 'h-12', ring: 'border-[#c8814b]/60', badge: '🥉', tint: 'rgba(200,129,75,0.14)' };
+              return (
+                <div className="relative z-10 flex items-end justify-center gap-3 pb-5">
+                  {order.map((p, i) => {
+                    const s = styleFor(p.rank);
+                    return (
+                      <motion.div key={p.id} className="flex flex-col items-center w-24"
+                        initial={{ opacity: 0, y: 34 }} animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.25 + i * 0.1, type: 'spring', stiffness: 220, damping: 20 }}>
+                        <span className="text-xl mb-1">{s.badge}</span>
+                        <div className={`w-12 h-12 rounded-full border-2 ${s.ring} flex items-center justify-center text-white font-black text-lg`} style={{ background: s.tint }}>
+                          {p.nickname.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="mt-1.5 text-xs font-bold text-white max-w-[88px] truncate">{p.nickname}</span>
+                        <span className="text-[10px] text-zinc-500 font-mono">{p.timeTaken}</span>
+                        <div className={`${s.h} w-20 mt-2 rounded-t-lg border-t border-x border-white/10`} style={{ background: s.tint }} />
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
-            {/* Leaderboard Table (Ranks 1st through 6th) */}
-            <div className="flex-1 overflow-y-auto my-4 space-y-2.5">
-              <div className="grid grid-cols-12 text-[10px] uppercase font-bold text-gray-400 px-3 py-1.5 bg-[#0d1117] rounded-lg">
+            {/* Full ranking */}
+            <div className="relative z-10 flex-1 overflow-y-auto -mx-1 px-1 space-y-2 border-t border-white/10 pt-4">
+              <div className="grid grid-cols-12 text-[10px] uppercase tracking-wider font-bold text-zinc-500 px-3 pb-1">
                 <div className="col-span-1">Rank</div>
                 <div className="col-span-4">Contender</div>
                 <div className="col-span-2">Status</div>
@@ -2355,23 +2414,23 @@ export default function CodeArenaPlatform() {
                 <div className="col-span-3 text-right">Accuracy & Score</div>
               </div>
 
-              {leaderboardData.map((player) => {
+              {leaderboardData.map((player, idx) => {
                 const isMe = player.id === socket?.id;
                 const isPassed = player.status === 'Accepted';
 
                 return (
-                  <div
+                  <motion.div
                     key={player.id}
-                    className={`grid grid-cols-12 items-center text-xs p-3.5 rounded-xl border transition ${
+                    initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4 + idx * 0.05 }}
+                    className={`grid grid-cols-12 items-center text-xs p-3.5 rounded-xl border ${
                       player.isWinner
-                        ? 'bg-gradient-to-r from-amber-950/40 via-[#161b22] to-amber-950/30 border-amber-500/50 shadow-md'
-                        : isPassed
-                        ? isMe
-                          ? 'bg-indigo-950/30 border-indigo-500/40'
-                          : 'bg-[#0d1117] border-[#30363d]'
+                        ? 'border-[#f5c56b]/45 bg-[#f5c56b]/[0.06]'
                         : isMe
-                        ? 'bg-rose-950/20 border-rose-500/40'
-                        : 'bg-[#0d1117] border-rose-900/30'
+                        ? 'border-indigo-500/40 bg-indigo-500/[0.06]'
+                        : isPassed
+                        ? 'border-white/10 bg-white/[0.02]'
+                        : 'border-rose-500/25 bg-white/[0.02]'
                     }`}
                   >
                     {/* Rank */}
@@ -2381,9 +2440,8 @@ export default function CodeArenaPlatform() {
 
                     {/* Contender Name */}
                     <div className="col-span-4 flex items-center space-x-2 truncate">
-                      <span className={`w-6 h-6 rounded-full text-white font-bold text-xs flex items-center justify-center shrink-0 ${
-                        isPassed ? 'bg-gradient-to-tr from-amber-500 to-indigo-600' : 'bg-gradient-to-tr from-rose-600 to-gray-700'
-                      }`}>
+                      <span className="w-6 h-6 rounded-full text-white font-bold text-xs flex items-center justify-center shrink-0 border border-white/15"
+                        style={{ background: isPassed ? 'rgba(129,140,248,0.28)' : 'rgba(248,113,113,0.22)' }}>
                         {player.nickname.charAt(0).toUpperCase()}
                       </span>
                       <span className="font-bold text-white truncate">
@@ -2464,17 +2522,17 @@ export default function CodeArenaPlatform() {
 
                     {/* AI Feedback snippet for Passing Submissions */}
                     {isPassed && player.feedback && (
-                      <div className="col-span-12 mt-2 pt-2 border-t border-[#30363d]/60 text-[11px] text-gray-400 italic">
+                      <div className="col-span-12 mt-2 pt-2 border-t border-white/10 text-[11px] text-zinc-400 italic">
                         "{player.feedback}"
                       </div>
                     )}
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
 
             {/* Footer Actions */}
-            <div className="pt-3 border-t border-[#30363d] flex items-center justify-between">
+            <div className="relative z-10 pt-4 mt-4 border-t border-white/10 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => {
@@ -2482,24 +2540,25 @@ export default function CodeArenaPlatform() {
                   setShowCodeReviewModal(true);
                   setSelectedReviewTab('official');
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600/30 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/40 transition cursor-pointer"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-zinc-200 border border-white/10 transition cursor-pointer"
               >
                 <Code2 className="w-3.5 h-3.5" />
-                <span>Review All Solutions & Code</span>
+                <span>Review All Solutions</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleLeaveRoom}
-                className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-bold bg-gradient-to-r from-amber-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500 text-white shadow-lg transition cursor-pointer"
+                className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold bg-[#6366f1] hover:bg-[#818cf8] text-white shadow-lg transition cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>Exit Room & Return to Lobby</span>
+                <span>Exit to Lobby</span>
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* ------------------------------------------------------------------ */}
       {/* 5. POST-BATTLE CODE REVIEW & OFFICIAL SOLUTION MODAL               */}
