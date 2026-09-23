@@ -11,6 +11,7 @@ import { exec } from 'child_process';
 import util from 'util';
 import { GoogleGenAI } from '@google/genai';
 import { CODE_ARENA_PROBLEM_BANK } from './code_arena_bank.js';
+import { analyzeComplexity } from '../complexityAnalyzer.js';
 
 const execPromise = util.promisify(exec);
 
@@ -763,6 +764,18 @@ ${JSON.stringify(execution_output || {}, null, 2)}
   const defaultExpected = testCases[0]?.expected || problem?.examples?.[0]?.output || 'Expected output';
   const defaultActual = execution_output?.stdout?.trim() || execution_output?.stderr?.trim() || '(No output)';
 
+  // Derive complexity from the ACTUAL submitted code. The static analyzer runs
+  // for every submission; Gemini's estimate is preferred only when it is present
+  // and a well-formed Big-O. We never fall back to a hardcoded default.
+  const staticCx = analyzeComplexity(user_code, language);
+  const isBigO = (s) => typeof s === 'string' && /^\s*(O|Θ|Ω|Big-?O)?\s*\(/i.test(s.trim());
+  const timeComplexity = (usedGemini && isBigO(evaluation.time_complexity))
+    ? evaluation.time_complexity
+    : staticCx.time;
+  const spaceComplexity = (usedGemini && isBigO(evaluation.space_complexity))
+    ? evaluation.space_complexity
+    : staticCx.space;
+
   return {
     is_correct: isCorrect,
     accuracy_score: isCorrect ? accuracy : Math.min(accuracy, 25),
@@ -774,8 +787,8 @@ ${JSON.stringify(execution_output || {}, null, 2)}
     actual_output: evaluation.actual_output || defaultActual,
     expected_output: evaluation.expected_output || defaultExpected,
     reason: evaluation.reason || (isCorrect ? 'All test cases passed.' : `Wrong Answer: Output mismatch. Expected '${defaultExpected}', got '${defaultActual}'.`),
-    time_complexity: evaluation.time_complexity || 'O(N)',
-    space_complexity: evaluation.space_complexity || 'O(N)',
+    time_complexity: timeComplexity,
+    space_complexity: spaceComplexity,
     hints: Array.isArray(evaluation.hints) ? evaluation.hints : [],
     engine: usedGemini ? 'Gemini 2.5 Flash' : 'Built-in Intelligent Evaluator'
   };

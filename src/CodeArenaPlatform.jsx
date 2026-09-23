@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Editor from '@monaco-editor/react';
 import { io } from 'socket.io-client';
+import { analyzeComplexity } from '../complexityAnalyzer.js';
 import {
   Play,
   Sparkles,
@@ -382,6 +383,12 @@ export default function CodeArenaPlatform() {
 
   // Current code value for selected language
   const currentCode = codeBuffers[selectedLanguage] || currentProblem?.boilerplates?.[selectedLanguage] || boilerplateCode[selectedLanguage] || '';
+
+  // Live Big-O estimate of the code currently in the editor (updates as you type).
+  const liveComplexity = useMemo(
+    () => analyzeComplexity(currentCode, selectedLanguage),
+    [currentCode, selectedLanguage]
+  );
 
   // Execution & AI live response states
   const [executionData, setExecutionData] = useState({
@@ -1474,8 +1481,22 @@ export default function CodeArenaPlatform() {
                 </span>
               </div>
 
-              {/* Quick Actions: Reset, Copy, Font */}
+              {/* Quick Actions: Live Complexity + Reset */}
               <div className="flex items-center space-x-1.5 text-xs text-gray-400">
+                <div
+                  className="hidden sm:flex items-center gap-2 px-2 py-0.5 rounded bg-[#21262d] border border-[#30363d] font-mono"
+                  title="Live Big-O estimate of your current code (static analysis). Refined by AI on submit."
+                >
+                  <span className="flex items-center gap-1 text-emerald-400">
+                    <Clock className="w-3 h-3" />
+                    <span className="text-[10px] font-bold">{liveComplexity.time}</span>
+                  </span>
+                  <span className="w-px h-3 bg-[#30363d]" />
+                  <span className="flex items-center gap-1 text-sky-400">
+                    <Cpu className="w-3 h-3" />
+                    <span className="text-[10px] font-bold">{liveComplexity.space}</span>
+                  </span>
+                </div>
                 <button
                   onClick={handleResetCode}
                   disabled={isEditorLocked}
