@@ -1,40 +1,230 @@
+/* ============================================================================
+   CODE ARENA — MINIMAL LUXE
+   A near-black, high-contrast, whitespace-forward design system with a single
+   restrained accent (electric indigo). No neon, no glow: depth comes from
+   layered surfaces, hairline borders, and soft shadows. The palette is remapped
+   globally so the app recolors without touching thousands of className strings.
+   ============================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  * {
-    box-sizing: border-box;
-  }
-  
-  /* Custom sleek scrollbar for IDE look */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: #0f1117;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: #2d333b;
-    border-radius: 3px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: #444c56;
-  }
+:root {
+  /* Surfaces — layered near-black */
+  --bg:        #09090b;   /* page */
+  --panel:     #101012;   /* cards / sidebars */
+  --raised:    #17171a;   /* controls / hover */
+  --overlay:   #1c1c20;   /* menus / active */
+
+  /* Hairline borders */
+  --line:      rgba(255,255,255,0.08);
+  --line-hi:   rgba(255,255,255,0.16);
+
+  /* Single hero accent — electric indigo */
+  --accent:      #6366f1;
+  --accent-hi:   #818cf8;
+  --accent-deep: #4f46e5;
+  --accent-soft: rgba(99,102,241,0.14);
+  --accent-ring: rgba(99,102,241,0.45);
+
+  /* Semantic (flat, no glow) */
+  --ok:     #34d399;
+  --ok-soft: rgba(52,211,153,0.12);
+  --warn:   #fbbf24;
+  --warn-soft: rgba(251,191,36,0.12);
+  --bad:    #f87171;
+  --bad-soft: rgba(248,113,113,0.12);
+
+  /* Text */
+  --txt:      #fafafa;
+  --txt-dim:  #a1a1aa;
+  --txt-faint:#71717a;
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 8px 24px -8px rgba(0,0,0,0.6);
+  --shadow-lg: 0 24px 60px -18px rgba(0,0,0,0.75);
 }
 
-/* Monaco Editor Container overrides */
-.monaco-editor, .monaco-editor .overflow-guard {
-  border-radius: 0 0 6px 6px;
+/* ---------------------------------------------------------------------------
+   Screen environment — near-black with a single faint overhead wash
+   --------------------------------------------------------------------------- */
+html, body, #root { background: var(--bg); min-height: 100%; }
+
+body {
+  font-family: var(--font-sans);
+  color: var(--txt);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.011em;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(70% 45% at 50% -8%, rgba(99,102,241,0.10), transparent 70%);
+  background-attachment: fixed;
 }
 
-/* Subtle pulse glow */
-@keyframes soft-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+/* Refined wordmark: tight tracking, soft top-lit gradient text */
+.font-arcade, .font-display {
+  font-family: var(--font-sans) !important;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(180deg, #ffffff 0%, #b9bccb 130%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  text-shadow: none !important;
 }
 
-.animate-soft-pulse {
-  animation: soft-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+h1, h2, h3, h4 { letter-spacing: -0.02em; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse, .animate-ping, .animate-soft-pulse { animation: none !important; }
 }
+
+/* ---------------------------------------------------------------------------
+   Surface remap — collapse hardcoded GitHub-dark hex onto luxe surfaces
+   --------------------------------------------------------------------------- */
+[class*="bg-[#0d1117]"], [class*="bg-[#11161d]"], [class*="bg-[#13171f]"],
+[class*="bg-[#0f1117]"], [class*="bg-[#010409]"] { background-color: var(--bg) !important; }
+
+[class*="bg-[#161b22]"], [class*="bg-[#1e1e1e]"], [class*="bg-[#181818]"],
+[class*="bg-[#252526]"] { background-color: var(--panel) !important; }
+
+[class*="bg-[#21262d]"], [class*="bg-[#2d2d2d]"], [class*="bg-[#37373d]"],
+[class*="bg-[#2d333b]"] { background-color: var(--raised) !important; }
+
+[class*="border-[#30363d]"], [class*="border-[#444c56]"],
+[class*="border-[#333333]"], [class*="border-[#2d2d2d]"],
+[class*="border-[#21262d]"] { border-color: var(--line) !important; }
+
+/* ---------------------------------------------------------------------------
+   Accent remap — one hero (indigo) + refined semantics, no glow
+   --------------------------------------------------------------------------- */
+/* text */
+[class*="text-emerald-"], [class*="text-teal-"], [class*="text-green-"] { color: var(--ok) !important; }
+[class*="text-amber-"], [class*="text-yellow-"], [class*="text-orange-"] { color: var(--warn) !important; }
+[class*="text-indigo-"], [class*="text-violet-"], [class*="text-purple-"],
+[class*="text-sky-"], [class*="text-cyan-"], [class*="text-blue-"] { color: var(--accent-hi) !important; }
+[class*="text-rose-"], [class*="text-red-"], [class*="text-pink-"] { color: var(--bad) !important; }
+[class*="text-gray-"], [class*="text-slate-"], [class*="text-zinc-"],
+[class*="text-neutral-"] { color: var(--txt-dim) !important; }
+.text-white { color: var(--txt) !important; }
+/* kill every inherited neon text-shadow from the old theme */
+[class*="text-"] { text-shadow: none; }
+
+/* borders */
+[class*="border-emerald-"], [class*="border-teal-"], [class*="border-green-"] { border-color: rgba(52,211,153,0.35) !important; }
+[class*="border-amber-"], [class*="border-yellow-"], [class*="border-orange-"] { border-color: rgba(251,191,36,0.35) !important; }
+[class*="border-indigo-"], [class*="border-violet-"], [class*="border-purple-"],
+[class*="border-sky-"], [class*="border-cyan-"], [class*="border-blue-"] { border-color: var(--accent-ring) !important; }
+[class*="border-rose-"], [class*="border-red-"], [class*="border-pink-"] { border-color: rgba(248,113,113,0.35) !important; }
+
+/* translucent accent backgrounds → faint tints */
+[class*="bg-emerald-"], [class*="bg-teal-"], [class*="bg-green-"] { background-color: var(--ok-soft) !important; }
+[class*="bg-amber-"], [class*="bg-yellow-"], [class*="bg-orange-"] { background-color: var(--warn-soft) !important; }
+[class*="bg-indigo-"], [class*="bg-violet-"], [class*="bg-purple-"],
+[class*="bg-sky-"], [class*="bg-cyan-"], [class*="bg-blue-"] { background-color: var(--accent-soft) !important; }
+[class*="bg-rose-"], [class*="bg-red-"], [class*="bg-pink-"] { background-color: var(--bad-soft) !important; }
+
+/* rings / focus outlines */
+[class*="ring-emerald-"], [class*="ring-teal-"], [class*="ring-green-"] { --tw-ring-color: var(--ok) !important; }
+[class*="ring-amber-"], [class*="ring-yellow-"] { --tw-ring-color: var(--warn) !important; }
+[class*="ring-indigo-"], [class*="ring-sky-"], [class*="ring-cyan-"],
+[class*="ring-blue-"], [class*="ring-violet-"], [class*="ring-purple-"] { --tw-ring-color: var(--accent) !important; }
+
+/* ---------------------------------------------------------------------------
+   Gradient CTAs & chips — flatten onto the hero accent (clean, no neon glow)
+   --------------------------------------------------------------------------- */
+/* primary: every green/blue/indigo gradient becomes one solid indigo */
+[class*="from-emerald"], [class*="from-teal"], [class*="from-green"],
+[class*="from-indigo"], [class*="from-violet"], [class*="from-purple"],
+[class*="from-sky"], [class*="from-blue"], [class*="from-cyan"] {
+  background-image: none !important;
+  background-color: var(--accent) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: var(--shadow-md) !important;
+}
+/* warm secondary: amber gradients stay amber, flat */
+[class*="from-amber"], [class*="from-yellow"], [class*="from-orange"] {
+  background-image: none !important;
+  background-color: var(--warn) !important;
+  color: #1a1205 !important;
+  border-color: transparent !important;
+  box-shadow: var(--shadow-md) !important;
+}
+/* danger: red gradients stay red, flat */
+[class*="from-rose"], [class*="from-red"], [class*="from-pink"] {
+  background-image: none !important;
+  background-color: var(--bad) !important;
+  color: #1a0808 !important;
+  border-color: transparent !important;
+  box-shadow: var(--shadow-md) !important;
+}
+/* thin gradient accent bars / progress fills → solid accent, no shadow */
+.h-1\.5[class*="from-"], .h-1[class*="from-"], .h-2[class*="from-"],
+[class*="h-full"][class*="from-"] { box-shadow: none !important; }
+
+/* neutralize leftover colored Tailwind shadows to clean depth */
+[class*="shadow-emerald"], [class*="shadow-teal"], [class*="shadow-green"],
+[class*="shadow-indigo"], [class*="shadow-blue"], [class*="shadow-sky"],
+[class*="shadow-amber"], [class*="shadow-orange"], [class*="shadow-rose"],
+[class*="shadow-red"], [class*="shadow-purple"] { --tw-shadow-color: rgba(0,0,0,0.5) !important; }
+
+/* ---------------------------------------------------------------------------
+   Form controls — quiet dark fields with an indigo focus ring
+   --------------------------------------------------------------------------- */
+input, select, textarea {
+  font-family: var(--font-sans) !important;
+  background-color: var(--raised) !important;
+  color: var(--txt) !important;
+  border-color: var(--line) !important;
+  caret-color: var(--accent-hi);
+}
+input::placeholder, textarea::placeholder { color: var(--txt-faint) !important; }
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-soft) !important;
+}
+select option { background: var(--overlay); color: var(--txt); }
+::selection { background: var(--accent); color: #fff; }
+
+/* ---------------------------------------------------------------------------
+   Scrollbars & editor framing
+   --------------------------------------------------------------------------- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line-hi); border-radius: 999px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+.monaco-editor, .monaco-editor-background, .monaco-editor .margin { background-color: var(--bg) !important; }
+
+@keyframes soft-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.animate-soft-pulse { animation: soft-pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+
+/* ---------------------------------------------------------------------------
+   Premium micro-interactions — subtle, tactile, applied app-wide
+   --------------------------------------------------------------------------- */
+button, [role="button"] {
+  transition: transform .12s ease, filter .18s ease, background-color .18s ease,
+              border-color .18s ease, box-shadow .18s ease, color .18s ease;
+}
+button:not(:disabled):hover { filter: brightness(1.07); }
+button:not(:disabled):active { transform: translateY(0.5px) scale(0.985); }
+
+/* Panels/cards ease their borders on hover for a quiet lift */
+[class*="rounded-xl"], [class*="rounded-2xl"], [class*="rounded-lg"] {
+  transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button, [role="button"] { transition: none; }
+  button:not(:disabled):active { transform: none; }
+}
+
+* { box-sizing: border-box; }

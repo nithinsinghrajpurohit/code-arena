@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Editor from '@monaco-editor/react';
 import { io } from 'socket.io-client';
+import { motion, AnimatePresence } from 'framer-motion';
 import { analyzeComplexity } from '../complexityAnalyzer.js';
 import {
   Play,
@@ -958,9 +959,9 @@ export default function CodeArenaPlatform() {
       <header className="h-14 bg-[#161b22] border-b border-[#30363d] px-4 flex items-center justify-between shrink-0 z-20 shadow-lg">
         {/* Brand & Room Info */}
         <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-2 bg-gradient-to-r from-amber-500/20 to-indigo-500/20 border border-amber-500/30 px-2.5 py-1 rounded-lg">
-            <Swords className="w-5 h-5 text-amber-400 animate-pulse" />
-            <span className="font-extrabold text-sm tracking-wider bg-gradient-to-r from-amber-300 via-emerald-300 to-indigo-300 bg-clip-text text-transparent">
+          <div className="flex items-center space-x-2.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5">
+            <Swords className="w-4 h-4 text-indigo-400" />
+            <span className="font-arcade text-sm">
               CODE ARENA
             </span>
           </div>
@@ -1865,9 +1866,22 @@ export default function CodeArenaPlatform() {
 
       {/* ------------------------------------------------------------------ */}
       {/* 3. LOBBY ENTRY MODAL (When not currently in a room)                 */}
+        <AnimatePresence>
           {showLobbyModal && !inRoom && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="w-full max-w-lg bg-[#161b22] border border-[#30363d] rounded-2xl shadow-2xl relative flex flex-col max-h-[92vh] my-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <motion.div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+        >
+          <motion.div
+            className="w-full max-w-lg bg-[#161b22] border border-[#30363d] rounded-2xl shadow-2xl relative flex flex-col max-h-[92vh] my-auto overflow-hidden"
+            initial={{ opacity: 0, y: 24, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 26, mass: 0.9 }}
+          >
             {/* Header Accent Bar */}
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-500 via-emerald-500 to-indigo-500" />
 
@@ -1886,12 +1900,12 @@ export default function CodeArenaPlatform() {
 
               {/* Title & Brand */}
               <div className="flex items-center space-x-3 mb-3 pr-28">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-emerald-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/10">
-                  <Swords className="w-5 h-5 animate-pulse" />
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 flex items-center justify-center shrink-0">
+                  <Swords className="w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-lg font-black text-white tracking-wider flex items-center gap-2">
-                    <span>CODE ARENA</span>
+                    <span className="font-arcade text-lg">CODE ARENA</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/30">
                       LIVE BATTLES
                     </span>
@@ -2299,9 +2313,10 @@ export default function CodeArenaPlatform() {
                 <span className="text-gray-400 group-hover:translate-x-0.5 transition">→</span>
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+        </AnimatePresence>
 
       {/* ------------------------------------------------------------------ */}
       {/* 4. POST-BATTLE RESULTS LEADERBOARD MODAL                           */}
@@ -2314,7 +2329,7 @@ export default function CodeArenaPlatform() {
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/50 text-amber-400 mb-2 shadow-xl shadow-amber-500/20">
                 <Trophy className="w-8 h-8 animate-bounce" />
               </div>
-              <h2 className="text-2xl font-black text-white tracking-wider">ARENA BATTLE RESULTS</h2>
+              <h2 className="font-arcade text-xl tracking-tight">ARENA BATTLE RESULTS</h2>
 
               {winnerInfo ? (
                 <div className="mt-2 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold shadow-lg shadow-amber-500/10 animate-pulse">
